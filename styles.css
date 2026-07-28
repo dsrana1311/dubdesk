@@ -69,6 +69,11 @@
   --radius-sm:        5px;
   --radius-pill:      980px;
 
+  /* Caption table column layout — shared by header + rows so they stay aligned */
+  --col-grid:         28px 42px minmax(0, 1fr) minmax(0, 1fr) 160px;
+
+  --bookmark:         #FF9500;
+
   /* ── Typography families ── */
   --font-display: 'SF Pro Display', SF Pro Icons, Helvetica Neue, Helvetica, Arial, system-ui, sans-serif;
   --font-text:    'SF Pro Text', SF Pro Icons, Helvetica Neue, Helvetica, Arial, system-ui, sans-serif;
@@ -332,6 +337,27 @@ body {
   color: var(--text-tertiary);
 }
 
+/* Resume-at-bookmark button */
+.btn-resume {
+  background: rgba(255, 149, 0, 0.12);
+  color: #9a5a00;
+  border: 1px solid rgba(255, 149, 0, 0.35);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.12px;
+  padding: 5px 12px;
+  gap: 5px;
+}
+.btn-resume:hover:not(:disabled) {
+  background: rgba(255, 149, 0, 0.2);
+  border-color: rgba(255, 149, 0, 0.55);
+}
+.resume-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
 /* Verification progress bar */
 .verify-progress {
   width: 160px;
@@ -412,10 +438,22 @@ body {
 /* Column headers */
 .table-col-headers {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) minmax(0, 1fr) 160px;
+  grid-template-columns: var(--col-grid);
   background: var(--light-gray);
   border-radius: var(--radius) var(--radius) 0 0;
-  padding-right: 6px;
+  /* The caption table below keeps its 6px scrollbar permanently visible and
+     carries the same 14px side padding, so its content box already matches
+     this header's width — no extra gutter reservation needed here. */
+}
+
+.th-bookmark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  opacity: 0.55;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .th {
@@ -445,6 +483,13 @@ body {
   flex: 1;
   overflow-y: auto;
   border-top: none;
+  /* Match .caption-panel-header's horizontal padding so row columns line up
+     with the column headers above them */
+  padding-left: 14px;
+  padding-right: 14px;
+  /* Keep the (6px, webkit-styled) scrollbar track always present so columns
+     don't shift when the list grows long enough to scroll */
+  overflow-y: scroll;
 }
 
 /* Scrollbar — thin, minimal */
@@ -481,7 +526,7 @@ body {
 /* Caption Row */
 .caption-row {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) minmax(0, 1fr) 160px;
+  grid-template-columns: var(--col-grid);
   border-bottom: 1px solid var(--border);
   min-height: 52px;
   cursor: default;
@@ -518,6 +563,75 @@ body {
 }
 .cell:last-child {
   border-right: none;
+}
+
+/* ── Bookmark cell ── */
+.cell-bookmark {
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--border);
+}
+
+.bookmark-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  /* Dimmed placeholder until hover/active — keeps the column quiet */
+  opacity: 0;
+  filter: grayscale(1);
+  transition: opacity 0.15s ease, filter 0.15s ease, background 0.15s ease;
+}
+
+.caption-row:hover .bookmark-btn {
+  opacity: 0.4;
+}
+
+.bookmark-btn:hover {
+  opacity: 1 !important;
+  filter: grayscale(0);
+  background: rgba(255, 149, 0, 0.12);
+}
+
+.bookmark-btn:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--apple-blue);
+  outline-offset: 1px;
+}
+
+/* Active bookmark — always visible, full colour */
+.caption-row.bookmarked .bookmark-btn {
+  opacity: 1;
+  filter: grayscale(0);
+}
+
+/* Bookmarked row treatment: left accent bar + warm tint.
+   Uses a border, not just colour, so it reads without relying on hue alone. */
+.caption-row.bookmarked {
+  background: rgba(255, 149, 0, 0.07);
+  box-shadow: inset 3px 0 0 0 var(--bookmark);
+}
+.caption-row.bookmarked.selected {
+  background: rgba(255, 149, 0, 0.1);
+  box-shadow: inset 3px 0 0 0 var(--bookmark), inset 0 0 0 1px var(--apple-blue);
+}
+
+/* Brief pulse when jumping to the bookmark, so the eye lands on it */
+@keyframes bookmarkFlash {
+  0%, 100% { background: rgba(255, 149, 0, 0.07); }
+  35%      { background: rgba(255, 149, 0, 0.3); }
+}
+.caption-row.bookmark-flash {
+  animation: bookmarkFlash 0.9s ease;
 }
 
 /* Check/number cell */
@@ -812,6 +926,60 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ── Keyboard shortcuts list ── */
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.shortcut-row:last-child {
+  border-bottom: none;
+}
+
+.shortcut-row dt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.shortcut-row dd {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.shortcut-note {
+  display: block;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 7px;
+  font-family: var(--font-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text-primary);
+  background: var(--light-gray);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
 }
 
 /* ==================== TOAST ==================== */
@@ -1199,6 +1367,49 @@ body {
 .timeline-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.32); }
 .timeline-scrollbar-thumb:active { cursor: grabbing; }
 .timeline-scrollbar.disabled .timeline-scrollbar-thumb { cursor: default; }
+
+/* ==================== ACCESSIBILITY ==================== */
+
+/* Visible focus for the small in-row controls (were previously focus-invisible) */
+.play-btn:focus-visible,
+.rec-btn:focus-visible,
+.dl-btn:focus-visible,
+.listen-btn:focus-visible,
+.timeline-play-btn:focus-visible,
+.modal-close:focus-visible,
+.mic-select:focus-visible,
+.pace-slider:focus-visible,
+.hinglish-textarea:focus-visible {
+  outline: 2px solid var(--apple-blue);
+  outline-offset: 1px;
+}
+
+/* Keep the caret visible when tabbing through captions */
+.hinglish-textarea:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Screen-reader-only text (labels for icon-only controls) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* ==================== UTILITIES ==================== */
 
