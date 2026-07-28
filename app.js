@@ -12,6 +12,7 @@
 const state = {
   captions: [],       // { index, startTime, endTime, startTimeStr, endTimeStr, text, hinglish, verified }
   selectedRow: null,  // index into state.captions
+  bookmark: null,     // index of the "resume here next sitting" caption, or null
   apiKey: localStorage.getItem('openai_api_key') || '',
   videoId: null,
   isTranslating: false,
@@ -54,6 +55,11 @@ const el = {
   youtubeUrl:           document.getElementById('youtube-url'),
   settingsBtn:          document.getElementById('settings-btn'),
   settingsModal:        document.getElementById('settings-modal'),
+  shortcutsBtn:         document.getElementById('shortcuts-btn'),
+  shortcutsModal:       document.getElementById('shortcuts-modal'),
+  closeShortcuts:       document.getElementById('close-shortcuts'),
+  resumeBtn:            document.getElementById('resume-btn'),
+  resumeLabel:          document.getElementById('resume-label'),
   closeSettings:        document.getElementById('close-settings'),
   cancelSettings:       document.getElementById('cancel-settings'),
   saveApiKey:           document.getElementById('save-api-key'),
@@ -189,7 +195,18 @@ function renderTable() {
     const recLabel    = covered ? '✎ Edit' : '● Rec';
     const recTitle    = covered ? 'Re-record this cell only' : 'Record audio for this caption only';
 
+    const isBookmarked = state.bookmark === idx;
+    if (isBookmarked) row.classList.add('bookmarked');
+
     row.innerHTML = `
+      <div class="cell cell-bookmark">
+        <button class="bookmark-btn" data-bookmark-index="${idx}"
+                aria-pressed="${isBookmarked}"
+                title="${isBookmarked ? 'Remove bookmark' : 'Bookmark this caption to resume here later'}">
+          <span aria-hidden="true">🔖</span>
+          <span class="sr-only">${isBookmarked ? 'Remove bookmark' : 'Bookmark caption ' + cap.index}</span>
+        </button>
+      </div>
       <div class="cell cell-check">
         <span class="row-number">${cap.index}</span>
         <span class="verified-icon">✓</span>
@@ -220,11 +237,16 @@ function renderTable() {
           title="Optional: words to exclude from translation (Column D in VBA)">
       </div>`;
 
-    // Row selection (click anywhere except textarea / play btn)
+    // Row selection (click anywhere except textarea / play btn / bookmark btn)
     row.addEventListener('click', e => {
       if (e.target.tagName === 'TEXTAREA' || e.target.classList.contains('play-btn')) return;
+      if (e.target.closest('.bookmark-btn')) return;
       selectRow(idx);
     });
+
+    // Bookmark toggle — marks where to resume next sitting
+    row.querySelector('.bookmark-btn')
+      .addEventListener('click', e => { e.stopPropagation(); toggleBookmark(idx); });
 
     // Textarea: sync to state on input; select row on focus
     const ta = row.querySelector('.hinglish-textarea');
@@ -331,6 +353,7 @@ function updateProgress() {
   el.verifyProgress100.style.width = `${pct}%`;
   el.verifyProgress90.style.width  = '0%';
   updateAvgUtility();
+  updateResumeButton();
 }
 
 function updateButtons() {
@@ -783,6 +806,134 @@ async function retranslateSelected(mode) {
 }
 
 // ─────────────────────────────────────────────
+// BOOKMARK — "resume here next sitting"
+// ─────────────────────────────────────────────
+//
+// A single resume point. Setting a bookmark on a new row moves it off the
+// old one. Persisted with the draft so it survives a reload, and also
+// written immediately (not only on Save Draft) so an accidental tab close
+// doesn't lose your place.
+
+const BOOKMARK_KEY = 'dubdesk_bookmark';
+
+/** Toggle the bookmark on idx: sets it, or clears it if already there. */
+function toggleBookmark(idx) {
+  if (state.bookmark === idx) {
+    setBookmark(null);
+    showToast('Bookmark removed', 'info');
+  } else {
+    setBookmark(idx);
+    const cap = state.captions[idx];
+    showToast(`Bookmarked caption #${cap ? cap.index : idx + 1}`, 'success');
+  }
+}
+
+/**
+ * Set (or clear, with null) the resume point and refresh everything that
+ * reflects it — the old row, the new row, the sub-header button, storage.
+ */
+function setBookmark(idx) {
+  const prev = state.bookmark;
+  state.bookmark = idx;
+
+  if (prev !== null && prev !== idx) refreshBookmarkRow(prev);
+  if (idx !== null) refreshBookmarkRow(idx);
+
+  persistBookmark();
+  updateResumeButton();
+}
+
+/** Re-sync a single row's bookmark visuals without a full table re-render. */
+function refreshBookmarkRow(idx) {
+  const row = rowEl(idx);
+  if (!row) return;
+
+  const active = state.bookmark === idx;
+  const cap    = state.captions[idx];
+  row.classList.toggle('bookmarked', active);
+
+  const btn = row.querySelector('.bookmark-btn');
+  if (!btn) return;
+  btn.setAttribute('aria-pressed', String(active));
+  btn.title = active
+    ? 'Remove bookmark'
+    : 'Bookmark this caption to resume here later';
+  const srLabel = btn.querySelector('.sr-only');
+  if (srLabel) {
+    srLabel.textContent = active
+      ? 'Remove bookmark'
+      : `Bookmark caption ${cap ? cap.index : idx + 1}`;
+  }
+}
+
+/**
+ * Jump to the bookmarked caption: select it, centre it, and flash it so the
+ * eye lands in the right place. Also seeks the video to that caption.
+ */
+function goToBookmark() {
+  if (state.bookmark === null) {
+    showToast('No bookmark set — press B on a caption to set one', 'info');
+    return;
+  }
+  if (state.bookmark >= state.captions.length) {
+    showToast('Bookmark points past the end of this SRT', 'error');
+    return;
+  }
+
+  const idx = state.bookmark;
+  selectRow(idx);
+  scrollRowToCenter(idx);
+
+  const row = rowEl(idx);
+  if (row) {
+    row.classList.remove('bookmark-flash');
+    // Force reflow so the animation restarts on repeat jumps
+    void row.offsetWidth;
+    row.classList.add('bookmark-flash');
+    setTimeout(() => row.classList.remove('bookmark-flash'), 1000);
+  }
+
+  const cap = state.captions[idx];
+  if (cap) seekVideo(cap.startTime, false);
+}
+
+/** Show/hide + label the sub-header resume button. */
+function updateResumeButton() {
+  if (!el.resumeBtn) return;
+
+  const idx = state.bookmark;
+  const valid = idx !== null && idx < state.captions.length;
+
+  if (!valid) {
+    el.resumeBtn.classList.add('hidden');
+    return;
+  }
+
+  const cap = state.captions[idx];
+  el.resumeBtn.classList.remove('hidden');
+  el.resumeLabel.textContent = `Resume at #${cap ? cap.index : idx + 1}`;
+  el.resumeBtn.title = `Jump to your bookmarked caption (Shift+B)`;
+}
+
+function persistBookmark() {
+  try {
+    if (state.bookmark === null) localStorage.removeItem(BOOKMARK_KEY);
+    else localStorage.setItem(BOOKMARK_KEY, String(state.bookmark));
+  } catch (_) { /* storage full / disabled — bookmark just won't persist */ }
+}
+
+function restoreBookmark() {
+  try {
+    const raw = localStorage.getItem(BOOKMARK_KEY);
+    if (raw === null) return;
+    const idx = parseInt(raw, 10);
+    if (!isNaN(idx) && idx >= 0 && idx < state.captions.length) {
+      state.bookmark = idx;
+    }
+  } catch (_) { /* ignore */ }
+}
+
+// ─────────────────────────────────────────────
 // DRAFT — SAVE & LOAD
 // ─────────────────────────────────────────────
 
@@ -796,6 +947,7 @@ function saveDraft() {
     captions,
     videoId:  state.videoId,
     title:    el.videoTitle.textContent,
+    bookmark: state.bookmark,
     savedAt:  new Date().toISOString(),
   };
   localStorage.setItem('dubdesk_draft', JSON.stringify(draft));
@@ -810,6 +962,13 @@ function loadDraft() {
     state.captions = d.captions || [];
     state.videoId  = d.videoId  || null;
 
+    // Bookmark: prefer the draft's own value, else the standalone key
+    // (which is written on every toggle, so it can be newer than the draft).
+    if (typeof d.bookmark === 'number' && d.bookmark < state.captions.length) {
+      state.bookmark = d.bookmark;
+    }
+    restoreBookmark();
+
     if (d.title) el.videoTitle.textContent = d.title;
 
     if (state.videoId) {
@@ -820,7 +979,21 @@ function loadDraft() {
     if (state.captions.length) {
       renderTable();
       fitTimeline();
-      showToast(`Draft loaded (${state.captions.length} captions)`, 'success');
+      updateResumeButton();
+
+      // Resume where the last sitting left off
+      if (state.bookmark !== null) {
+        const cap = state.captions[state.bookmark];
+        selectRow(state.bookmark);
+        // Wait for layout so offsetTop/clientHeight are real before centring
+        requestAnimationFrame(() => goToBookmark());
+        showToast(
+          `Draft loaded — resuming at caption #${cap ? cap.index : state.bookmark + 1}`,
+          'success'
+        );
+      } else {
+        showToast(`Draft loaded (${state.captions.length} captions)`, 'success');
+      }
     }
   } catch (e) {
     console.error('Failed to load draft:', e);
@@ -2485,6 +2658,8 @@ function init() {
     reader.onload = ev => {
       state.captions    = parseSRT(ev.target.result);
       state.selectedRow = null;
+      // New source file — the old resume point no longer means anything
+      setBookmark(null);
       renderTable();
       fitTimeline();
       if (state.captions.length) {
@@ -2581,6 +2756,28 @@ function init() {
     if (e.key === 'Enter') el.saveApiKey.click();
   });
 
+  // ── Keyboard shortcuts modal ────────────────
+  // Show ⌘ instead of Ctrl on Mac (the handler accepts either)
+  if (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) {
+    el.shortcutsModal.querySelectorAll('kbd').forEach(k => {
+      if (k.textContent.trim() === 'Ctrl') k.textContent = '⌘';
+    });
+  }
+
+  function openShortcuts()  { el.shortcutsModal.classList.remove('hidden'); el.closeShortcuts.focus(); }
+  function closeShortcuts() { el.shortcutsModal.classList.add('hidden'); }
+
+  if (el.shortcutsBtn) el.shortcutsBtn.addEventListener('click', openShortcuts);
+  if (el.closeShortcuts) el.closeShortcuts.addEventListener('click', closeShortcuts);
+  if (el.shortcutsModal) {
+    el.shortcutsModal.addEventListener('click', e => {
+      if (e.target === el.shortcutsModal) closeShortcuts();
+    });
+  }
+
+  // ── Bookmark / resume ───────────────────────
+  if (el.resumeBtn) el.resumeBtn.addEventListener('click', goToBookmark);
+
   // ── Draft & Export ───────────────────────────
   el.saveDraftBtn.addEventListener('click', saveDraft);
   el.submitBtn.addEventListener('click', exportSRT);
@@ -2629,9 +2826,59 @@ function init() {
       return;
     }
 
-    // Don't intercept when focus is inside an input/textarea
+    // Escape also dismisses whichever modal is open
+    if (e.key === 'Escape') {
+      if (!el.shortcutsModal.classList.contains('hidden')) {
+        closeShortcuts();
+        return;
+      }
+      if (!el.settingsModal.classList.contains('hidden')) {
+        closeModal();
+        return;
+      }
+    }
+
     const tag = document.activeElement?.tagName;
-    if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+    const typing = tag === 'TEXTAREA' || tag === 'INPUT';
+
+    // ── Bookmark ────────────────────────────────
+    // Clicking a caption row puts focus in its Hinglish textarea, so the
+    // usual "ignore keys while typing" rule would make a plain-letter
+    // shortcut unreachable in normal use. Ctrl/Cmd+B works everywhere,
+    // including mid-edit; plain B is the shorthand when not typing.
+    const bookmarkKey = (e.key === 'b' || e.key === 'B');
+
+    if (bookmarkKey && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (e.shiftKey) goToBookmark();
+      else if (state.selectedRow !== null) toggleBookmark(state.selectedRow);
+      else showToast('Select a caption first', 'info');
+      return;
+    }
+
+    // Don't intercept plain keys while the user is typing
+    if (typing) return;
+
+    // ? — keyboard shortcut help
+    if (e.key === '?') {
+      e.preventDefault();
+      if (el.shortcutsModal.classList.contains('hidden')) openShortcuts();
+      else closeShortcuts();
+      return;
+    }
+
+    // B — bookmark the selected caption; Shift+B — jump to the bookmark
+    if (bookmarkKey) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        goToBookmark();
+      } else if (state.selectedRow !== null) {
+        toggleBookmark(state.selectedRow);
+      } else {
+        showToast('Select a caption first', 'info');
+      }
+      return;
+    }
 
     if (e.key === ' ') {
       e.preventDefault();
