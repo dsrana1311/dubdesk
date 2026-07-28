@@ -469,42 +469,45 @@ function playSegment(startTime, endTime) {
     _segmentStopTimer = null;
   }
 
-  const durationMs = Math.max(0, (endTime - startTime) * 1000);
-
-  // Seek first, then poll until the player is actually near startTime before
-  // starting the stop timer. This compensates for seekTo() being asynchronous —
-  // without the wait the timer fires too early on the first play of each cell.
   seekVideo(startTime);
 
-  const SEEK_POLL_MS  = 50;   // how often to check the playhead position
-  const SEEK_TIMEOUT_MS = 2000; // give up waiting after this long and just use durationMs
+  // Stop by watching the real playhead rather than by wall-clock duration.
+  // A timer started at seek time runs while the player is still buffering
+  // (state 3), which cuts the first play of a segment short by the buffering
+  // delay; polling getCurrentTime() only advances when frames actually play,
+  // so it is immune to seek latency, buffering and playback-rate changes.
+  const POLL_MS    = 30;
+  const EPSILON    = 0.02;  // stop a hair early rather than overshooting a frame
+  const MAX_WAIT_MS = 10000; // safety net if the player never reaches endTime
 
-  const seekStart = Date.now();
+  const started = Date.now();
+  let reachedStart = false;
 
-  function waitForSeekThenStop() {
-    const elapsed = Date.now() - seekStart;
-    const currentTime = ytPlayer && typeof ytPlayer.getCurrentTime === 'function'
+  function tick() {
+    _segmentStopTimer = null;
+
+    const t = ytPlayer && typeof ytPlayer.getCurrentTime === 'function'
       ? ytPlayer.getCurrentTime()
       : null;
 
-    const seekComplete = currentTime !== null && Math.abs(currentTime - startTime) < 0.3;
-    const timedOut     = elapsed >= SEEK_TIMEOUT_MS;
-
-    if (seekComplete || timedOut) {
-      // Recompute remaining time from actual playhead position so we stop
-      // at endTime regardless of how long the seek took.
-      const actualCurrent = seekComplete ? currentTime : startTime;
-      const remaining = Math.max(0, (endTime - actualCurrent) * 1000);
-      _segmentStopTimer = setTimeout(() => {
-        pauseVideo();
-        _segmentStopTimer = null;
-      }, remaining);
-    } else {
-      _segmentStopTimer = setTimeout(waitForSeekThenStop, SEEK_POLL_MS);
+    if (t === null || Date.now() - started > MAX_WAIT_MS) {
+      pauseVideo();
+      return;
     }
+
+    // Ignore stale positions from before the seek lands: only start checking
+    // for the end once the playhead has actually arrived in the segment.
+    if (!reachedStart) {
+      if (t >= startTime - 0.3) reachedStart = true;
+    } else if (t >= endTime - EPSILON) {
+      pauseVideo();
+      return;
+    }
+
+    _segmentStopTimer = setTimeout(tick, POLL_MS);
   }
 
-  _segmentStopTimer = setTimeout(waitForSeekThenStop, SEEK_POLL_MS);
+  _segmentStopTimer = setTimeout(tick, POLL_MS);
 }
 
 function pauseVideo() {
