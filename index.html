@@ -6,7 +6,7 @@
   <title>DubDesk — Subtitle Translator</title>
 
   <link rel="icon" type="image/png" href="logo.png">
-  
+
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -30,6 +30,39 @@
     </div>
   </div>
 
+  <!-- Keyboard Shortcuts Modal -->
+  <div id="shortcuts-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="shortcuts-title">Keyboard Shortcuts</h2>
+        <button class="modal-close" id="close-shortcuts" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <dl class="shortcut-list">
+          <div class="shortcut-row"><dt><kbd>Space</kbd></dt><dd>Play / pause video</dd></div>
+          <div class="shortcut-row"><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Move between captions</dd></div>
+          <div class="shortcut-row">
+            <dt><kbd>Ctrl</kbd> + <kbd>B</kbd></dt>
+            <dd>Bookmark selected caption <span class="shortcut-note">(works while typing)</span></dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd></dt>
+            <dd>Jump to bookmark</dd>
+          </div>
+          <div class="shortcut-row"><dt><kbd>B</kbd></dt><dd>Bookmark (when not typing)</dd></div>
+          <div class="shortcut-row"><dt><kbd>R</kbd></dt><dd>Record continuously from selected</dd></div>
+          <div class="shortcut-row"><dt><kbd>E</kbd></dt><dd>Record this cell only</dd></div>
+          <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Stop recording</dd></div>
+          <div class="shortcut-row"><dt><kbd>9</kbd></dt><dd>Re-translate selected (90% length)</dd></div>
+          <div class="shortcut-row"><dt><kbd>0</kbd></dt><dd>Re-translate selected (100% length)</dd></div>
+          <div class="shortcut-row"><dt><kbd>?</kbd></dt><dd>Show this help</dd></div>
+        </dl>
+        <p class="hint">Single-key shortcuts are ignored while you're typing in a text field,
+           so they never interfere with editing. The <kbd>Ctrl</kbd> combinations always work.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Top Header Bar -->
   <header class="header">
     <div class="header-left">
@@ -48,7 +81,8 @@
       <button id="upload-btn" class="btn btn-header-outline">Upload SRT</button>
       <input type="file" id="hinglish-srt-file-input" accept=".srt" hidden>
       <button id="upload-hinglish-btn" class="btn btn-header-outline hidden">Upload Hinglish SRT</button>
-      <button id="settings-btn" class="btn btn-icon" title="Settings">⚙</button>
+      <button id="shortcuts-btn" class="btn btn-icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+      <button id="settings-btn" class="btn btn-icon" title="Settings" aria-label="Settings">⚙</button>
     </div>
   </header>
 
@@ -56,6 +90,11 @@
   <div class="sub-header">
     <div class="sub-header-left">
       <span class="progress-indicator" id="progress-indicator">0 / 0 captions recorded</span>
+      <button id="resume-btn" class="btn btn-resume hidden"
+              title="Jump to your bookmarked caption (B)">
+        <span class="resume-icon" aria-hidden="true">🔖</span>
+        <span id="resume-label">Resume</span>
+      </button>
       <div class="verify-progress" id="verify-progress">
         <div class="verify-progress-100" id="verify-progress-100"></div>
         <div class="verify-progress-90" id="verify-progress-90"></div>
@@ -90,6 +129,7 @@
       <div class="caption-panel-header">
         <h2 id="video-title" class="video-title">Untitled</h2>
         <div class="table-col-headers">
+          <div class="th th-bookmark" title="Bookmark column"><span aria-hidden="true">🔖</span></div>
           <div class="th th-check">#</div>
           <div class="th th-a">A — English (source)</div>
           <div class="th th-b">B — Hinglish</div>
