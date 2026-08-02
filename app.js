@@ -13,6 +13,7 @@ const state = {
   captions: [],       // { index, startTime, endTime, startTimeStr, endTimeStr, text, hinglish, verified }
   selectedRow: null,  // index into state.captions
   bookmark: null,     // index of the "resume here next sitting" caption, or null
+  editingRow: null,   // index being edited via the keyboard (E); null when navigating
   apiKey: localStorage.getItem('openai_api_key') || '',
   videoId: null,
   isTranslating: false,
@@ -247,7 +248,19 @@ function renderTable() {
       // Update row highlight based on percentage
       applyRowClass(row, state.captions[idx]);
     });
-    ta.addEventListener('focus',  () => selectRow(idx));
+    // Focusing the textarea by any route (click, Tab, E) is edit mode, so
+    // Ctrl+↑/↓ hopping works the same whether you arrived by mouse or keyboard.
+    ta.addEventListener('focus', () => {
+      selectRow(idx);
+      state.editingRow = idx;
+      markEditingRow(idx);
+    });
+    ta.addEventListener('blur', () => {
+      if (state.editingRow === idx) {
+        state.editingRow = null;
+        markEditingRow(null);
+      }
+    });
 
     // Exclude-words input: sync to state, select row on focus
     const exclInput = row.querySelector('.exclude-input');
@@ -330,6 +343,60 @@ function selectRow(idx) {
   if (curr) curr.classList.add('selected');
   updateButtons();
   renderTimeline();
+}
+
+// ─────────────────────────────────────────────
+// KEYBOARD EDIT MODE
+// ─────────────────────────────────────────────
+// Two modes drive caption editing from the keyboard:
+//   navigate — arrows move the selection between rows, plain-letter shortcuts live
+//   edit     — E puts the caret in the row's textarea; arrows now move within the
+//              text, and Ctrl+↑/↓ hops to the neighbouring caption *without*
+//              leaving edit mode. Escape returns to navigate.
+
+/** The textarea for a row, or null if the row isn't rendered. */
+function rowTextarea(idx) {
+  return el.captionTable.querySelector(`.hinglish-textarea[data-index="${idx}"]`);
+}
+
+/**
+ * Enter edit mode on idx: select the row, focus its textarea and park the caret
+ * at the start of the text so the user reads/edits from the beginning.
+ */
+function enterEditMode(idx) {
+  if (idx === null || idx < 0 || idx >= state.captions.length) return;
+
+  selectRow(idx);
+  const ta = rowTextarea(idx);
+  if (!ta) return;
+
+  // focus() synchronously blurs the previously edited row, whose blur handler
+  // clears editingRow — so focus first and let its own focus handler set the
+  // new index, rather than assigning it here only to have the blur wipe it.
+  ta.focus();
+  state.editingRow = idx;
+  // Caret at the start. Deferred so it survives the browser's own
+  // focus handling, which otherwise drops the caret at the end.
+  requestAnimationFrame(() => ta.setSelectionRange(0, 0));
+
+  markEditingRow(idx);
+  rowEl(idx)?.scrollIntoView({ block: 'nearest' });
+}
+
+/** Leave edit mode and hand focus back to the table for row navigation. */
+function exitEditMode() {
+  if (state.editingRow === null) return;
+  const ta = rowTextarea(state.editingRow);
+  state.editingRow = null;
+  markEditingRow(null);
+  ta?.blur();
+}
+
+/** Paint the .editing cue on one row, clearing it everywhere else. */
+function markEditingRow(idx) {
+  el.captionTable.querySelectorAll('.caption-row.editing')
+    .forEach(r => r.classList.remove('editing'));
+  if (idx !== null) rowEl(idx)?.classList.add('editing');
 }
 
 function updateProgress() {
@@ -2797,6 +2864,26 @@ function init() {
       return;
     }
 
+    // Escape leaves keyboard edit mode (no recording in progress at this point)
+    if (e.key === 'Escape' && state.editingRow !== null) {
+      e.preventDefault();
+      exitEditMode();
+      return;
+    }
+
+    // Ctrl/Cmd + ↑/↓ — hop to the neighbouring caption, staying in edit mode.
+    // Handled before the "typing" guard because the caret is inside a textarea.
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') &&
+        (e.ctrlKey || e.metaKey) &&
+        state.editingRow !== null) {
+      e.preventDefault();
+      const delta = e.key === 'ArrowDown' ? 1 : -1;
+      const next  = state.editingRow + delta;
+      if (next < 0 || next >= state.captions.length) return;  // stop at the ends
+      enterEditMode(next);
+      return;
+    }
+
     // Escape also dismisses whichever modal is open
     if (e.key === 'Escape') {
       if (!el.shortcutsModal.classList.contains('hidden')) {
@@ -2863,9 +2950,10 @@ function init() {
       return;
     }
 
+    // E — edit the selected caption's translation from the keyboard
     if ((e.key === 'e' || e.key === 'E') && state.selectedRow !== null && !state.isRecording) {
       e.preventDefault();
-      startRecordingFrom(state.selectedRow, false);
+      enterEditMode(state.selectedRow);
       return;
     }
 
