@@ -40,7 +40,7 @@
       <div class="modal-body">
         <dl class="shortcut-list">
           <div class="shortcut-row"><dt><kbd>Space</kbd></dt><dd>Play / pause video</dd></div>
-          <div class="shortcut-row"><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Move between captions</dd></div>
+          <div class="shortcut-row"><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Move between captions <span class="shortcut-note">(move within the text while editing)</span></dd></div>
           <div class="shortcut-row">
             <dt><kbd>Ctrl</kbd> + <kbd>B</kbd></dt>
             <dd>Bookmark selected caption <span class="shortcut-note">(works while typing)</span></dd>
@@ -50,15 +50,21 @@
             <dd>Jump to bookmark</dd>
           </div>
           <div class="shortcut-row"><dt><kbd>B</kbd></dt><dd>Bookmark (when not typing)</dd></div>
+          <div class="shortcut-row"><dt><kbd>E</kbd></dt><dd>Edit selected caption's translation</dd></div>
+          <div class="shortcut-row">
+            <dt><kbd>Ctrl</kbd> + <kbd>↑</kbd> <kbd>↓</kbd></dt>
+            <dd>Move to previous / next caption <span class="shortcut-note">(stays in edit mode)</span></dd>
+          </div>
           <div class="shortcut-row"><dt><kbd>R</kbd></dt><dd>Record continuously from selected</dd></div>
-          <div class="shortcut-row"><dt><kbd>E</kbd></dt><dd>Record this cell only</dd></div>
-          <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Stop recording</dd></div>
+          <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Exit editing / stop recording</dd></div>
           <div class="shortcut-row"><dt><kbd>9</kbd></dt><dd>Re-translate selected (90% length)</dd></div>
           <div class="shortcut-row"><dt><kbd>0</kbd></dt><dd>Re-translate selected (100% length)</dd></div>
           <div class="shortcut-row"><dt><kbd>?</kbd></dt><dd>Show this help</dd></div>
         </dl>
         <p class="hint">Single-key shortcuts are ignored while you're typing in a text field,
            so they never interfere with editing. The <kbd>Ctrl</kbd> combinations always work.</p>
+        <p class="hint">Full keyboard flow: <kbd>↑</kbd><kbd>↓</kbd> to find a caption, <kbd>E</kbd> to edit it,
+           <kbd>Ctrl</kbd>+<kbd>↑</kbd><kbd>↓</kbd> to keep editing down the list, <kbd>Esc</kbd> when done.</p>
       </div>
     </div>
   </div>
