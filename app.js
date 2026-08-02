@@ -199,14 +199,6 @@ function renderTable() {
     if (isBookmarked) row.classList.add('bookmarked');
 
     row.innerHTML = `
-      <div class="cell cell-bookmark">
-        <button class="bookmark-btn" data-bookmark-index="${idx}"
-                aria-pressed="${isBookmarked}"
-                title="${isBookmarked ? 'Remove bookmark' : 'Bookmark this caption to resume here later'}">
-          <span aria-hidden="true">🔖</span>
-          <span class="sr-only">${isBookmarked ? 'Remove bookmark' : 'Bookmark caption ' + cap.index}</span>
-        </button>
-      </div>
       <div class="cell cell-check">
         <span class="row-number">${cap.index}</span>
         <span class="verified-icon">✓</span>
@@ -237,16 +229,11 @@ function renderTable() {
           title="Optional: words to exclude from translation (Column D in VBA)">
       </div>`;
 
-    // Row selection (click anywhere except textarea / play btn / bookmark btn)
+    // Row selection (click anywhere except textarea / play btn)
     row.addEventListener('click', e => {
       if (e.target.tagName === 'TEXTAREA' || e.target.classList.contains('play-btn')) return;
-      if (e.target.closest('.bookmark-btn')) return;
       selectRow(idx);
     });
-
-    // Bookmark toggle — marks where to resume next sitting
-    row.querySelector('.bookmark-btn')
-      .addEventListener('click', e => { e.stopPropagation(); toggleBookmark(idx); });
 
     // Textarea: sync to state on input; select row on focus
     const ta = row.querySelector('.hinglish-textarea');
@@ -843,27 +830,11 @@ function setBookmark(idx) {
   updateResumeButton();
 }
 
-/** Re-sync a single row's bookmark visuals without a full table re-render. */
+/** Re-sync a single row's bookmark highlight without a full table re-render. */
 function refreshBookmarkRow(idx) {
   const row = rowEl(idx);
   if (!row) return;
-
-  const active = state.bookmark === idx;
-  const cap    = state.captions[idx];
-  row.classList.toggle('bookmarked', active);
-
-  const btn = row.querySelector('.bookmark-btn');
-  if (!btn) return;
-  btn.setAttribute('aria-pressed', String(active));
-  btn.title = active
-    ? 'Remove bookmark'
-    : 'Bookmark this caption to resume here later';
-  const srLabel = btn.querySelector('.sr-only');
-  if (srLabel) {
-    srLabel.textContent = active
-      ? 'Remove bookmark'
-      : `Bookmark caption ${cap ? cap.index : idx + 1}`;
-  }
+  row.classList.toggle('bookmarked', state.bookmark === idx);
 }
 
 /**
