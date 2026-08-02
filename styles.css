@@ -70,7 +70,7 @@
   --radius-pill:      980px;
 
   /* Caption table column layout — shared by header + rows so they stay aligned */
-  --col-grid:         28px 42px minmax(0, 1fr) minmax(0, 1fr) 160px;
+  --col-grid:         42px minmax(0, 1fr) minmax(0, 1fr) 160px;
 
   --bookmark:         #FF9500;
 
@@ -446,16 +446,6 @@ body {
      this header's width — no extra gutter reservation needed here. */
 }
 
-.th-bookmark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  opacity: 0.55;
-  padding-left: 0;
-  padding-right: 0;
-}
-
 .th {
   padding: 7px 10px;
   font-family: var(--font-text);
@@ -565,70 +555,35 @@ body {
   border-right: none;
 }
 
-/* ── Bookmark cell ── */
-.cell-bookmark {
-  padding: 0;
-  align-items: center;
-  justify-content: center;
-  border-right: 1px solid var(--border);
-}
-
-.bookmark-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  /* Dimmed placeholder until hover/active — keeps the column quiet */
-  opacity: 0;
-  filter: grayscale(1);
-  transition: opacity 0.15s ease, filter 0.15s ease, background 0.15s ease;
-}
-
-.caption-row:hover .bookmark-btn {
-  opacity: 0.4;
-}
-
-.bookmark-btn:hover {
-  opacity: 1 !important;
-  filter: grayscale(0);
-  background: rgba(255, 149, 0, 0.12);
-}
-
-.bookmark-btn:focus-visible {
-  opacity: 1;
-  outline: 2px solid var(--apple-blue);
-  outline-offset: 1px;
-}
-
-/* Active bookmark — always visible, full colour */
-.caption-row.bookmarked .bookmark-btn {
-  opacity: 1;
-  filter: grayscale(0);
-}
-
-/* Bookmarked row treatment: left accent bar + warm tint.
-   Uses a border, not just colour, so it reads without relying on hue alone. */
+/* ── Bookmark ──
+   No dedicated column — the whole row is the indicator: a left accent bar
+   plus a warm tint. The bar means it reads without relying on hue alone. */
 .caption-row.bookmarked {
-  background: rgba(255, 149, 0, 0.07);
+  /* !important so the utility over/under-length tints can't mask the
+     bookmark — knowing where you left off outranks the length warning */
+  background: rgba(255, 149, 0, 0.1) !important;
   box-shadow: inset 3px 0 0 0 var(--bookmark);
 }
 .caption-row.bookmarked.selected {
-  background: rgba(255, 149, 0, 0.1);
+  background: rgba(255, 149, 0, 0.14) !important;
   box-shadow: inset 3px 0 0 0 var(--bookmark), inset 0 0 0 1px var(--apple-blue);
+}
+
+/* Small marker beside the row number, since there's no bookmark column */
+.caption-row.bookmarked .row-number {
+  color: #9a5a00;
+  font-weight: 600;
+}
+.caption-row.bookmarked .row-number::before {
+  content: '▸';
+  margin-right: 2px;
+  color: var(--bookmark);
 }
 
 /* Brief pulse when jumping to the bookmark, so the eye lands on it */
 @keyframes bookmarkFlash {
-  0%, 100% { background: rgba(255, 149, 0, 0.07); }
-  35%      { background: rgba(255, 149, 0, 0.3); }
+  0%, 100% { background: rgba(255, 149, 0, 0.1); }
+  35%      { background: rgba(255, 149, 0, 0.34); }
 }
 .caption-row.bookmark-flash {
   animation: bookmarkFlash 0.9s ease;
