@@ -69,6 +69,40 @@
     </div>
   </div>
 
+  <!-- Criblate Upload Modal -->
+  <div id="criblate-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="criblate-title">
+    <div class="modal-content modal-wide">
+      <div class="modal-header">
+        <h2 id="criblate-title">Upload to Criblate</h2>
+        <button class="modal-close" id="close-criblate" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label for="criblate-url-input">Criblate video URL</label>
+        <input type="text" id="criblate-url-input" placeholder="https://criblate.com/video/VIDEO_ID/hi/transcript/current">
+        <p class="hint" id="criblate-summary"></p>
+        <label class="criblate-check">
+          <input type="checkbox" id="criblate-autosave" checked>
+          Click “Save draft” on Criblate after filling
+        </label>
+
+        <ol class="criblate-steps">
+          <li><strong>One-time setup:</strong> drag this button to your bookmarks bar
+            <a id="criblate-bookmarklet" class="bookmarklet-link" href="#" title="Drag me to your bookmarks bar">⇪ DubDesk → Criblate</a>
+          </li>
+          <li>Click <strong>Open Criblate</strong> below. Your captions are sent to that tab and also copied to the clipboard.</li>
+          <li>When the transcript page has loaded (log in first if asked), click the <strong>DubDesk → Criblate</strong> bookmark. It fills every caption box in order and saves the draft.</li>
+        </ol>
+        <p class="hint">Can't drag? <button type="button" id="copy-bookmarklet-btn" class="link-btn">Copy the bookmarklet code</button>,
+          then create a new bookmark and paste it as the URL.</p>
+        <p class="hint" id="criblate-status" role="status"></p>
+      </div>
+      <div class="modal-footer">
+        <button id="criblate-open-btn" class="btn btn-primary">Open Criblate</button>
+        <button id="cancel-criblate" class="btn btn-ghost">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Top Header Bar -->
   <header class="header">
     <div class="header-left">
@@ -123,6 +157,7 @@
       <button id="stop-recording-btn" class="btn btn-stop hidden">◼ Stop</button>
       <button id="download-all-audio-btn" class="btn btn-sub-ghost" title="Download the full dub timeline (start to end) as one MP3">⬇ All Audio</button>
       <button id="save-draft-btn" class="btn btn-sub-ghost">Save Draft</button>
+      <button id="criblate-btn" class="btn btn-sub-ghost" title="Fill the translated captions into a Criblate transcript">⇪ Criblate</button>
       <button id="submit-btn" class="btn btn-success">Download</button>
     </div>
   </div>

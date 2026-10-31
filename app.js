@@ -85,6 +85,17 @@ const el = {
   toast:                document.getElementById('toast'),
   flowTeleprompter:     document.getElementById('flow-teleprompter'),
   timelinePlayBtn:      document.getElementById('timeline-play-btn'),
+  criblateBtn:          document.getElementById('criblate-btn'),
+  criblateModal:        document.getElementById('criblate-modal'),
+  criblateUrlInput:     document.getElementById('criblate-url-input'),
+  criblateAutosave:     document.getElementById('criblate-autosave'),
+  criblateSummary:      document.getElementById('criblate-summary'),
+  criblateStatus:       document.getElementById('criblate-status'),
+  criblateBookmarklet:  document.getElementById('criblate-bookmarklet'),
+  criblateOpenBtn:      document.getElementById('criblate-open-btn'),
+  copyBookmarkletBtn:   document.getElementById('copy-bookmarklet-btn'),
+  closeCriblate:        document.getElementById('close-criblate'),
+  cancelCriblate:       document.getElementById('cancel-criblate'),
 };
 
 // ─────────────────────────────────────────────
@@ -1060,6 +1071,260 @@ function exportSRT() {
   a.click();
   URL.revokeObjectURL(url);
   showToast('Hinglish SRT downloaded', 'success');
+}
+
+// ─────────────────────────────────────────────
+// CRIBLATE UPLOAD
+// ─────────────────────────────────────────────
+//
+// A web page can't reach into another site's DOM, so the filling runs on
+// criblate.com itself via a bookmarklet (criblateFiller below). DubDesk hands
+// it the captions two ways:
+//   1. postMessage — DubDesk opens the Criblate tab, so the bookmarklet can ask
+//      window.opener for the payload. No prompts, instant.
+//   2. Clipboard  — fallback when the opener link is gone (tab opened by hand,
+//      or Criblate cuts it). The payload is copied when you click Open.
+// Caption N goes into Criblate box N, exactly like the old Auto_Fill.docx flow.
+
+const CRIBLATE_MARK   = 'DUBDESK_CRIBLATE_V1';
+const CRIBLATE_ORIGIN = /^https:\/\/([a-z0-9-]+\.)*criblate\.com$/i;
+
+let criblatePayload = null;   // payload served to the bookmarklet via postMessage
+
+/**
+ * Runs ON criblate.com (as a bookmarklet). Must be fully self-contained:
+ * no outer variables, no // comments (it's serialised into a javascript: URL).
+ */
+function criblateFiller() {
+  var MARK = 'DUBDESK_CRIBLATE_V1';
+  var BOX_SEL = 'div[data-replicated-value] > textarea';
+
+  var panel = document.getElementById('dubdesk-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'dubdesk-panel';
+    panel.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;max-width:340px;' +
+      'padding:12px 16px;border-radius:10px;background:#1d1d1f;color:#fff;' +
+      'font:13px/1.45 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);white-space:pre-line';
+    panel.onclick = function () { panel.remove(); };
+    document.body.appendChild(panel);
+  }
+  function say(msg) { panel.textContent = 'DubDesk → Criblate\n' + msg; }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function parse(raw) {
+    if (!raw || raw.indexOf(MARK) !== 0) return null;
+    try { return JSON.parse(raw.slice(MARK.length)); } catch (e) { return null; }
+  }
+
+  function fromOpener() {
+    return new Promise(function (resolve) {
+      if (!window.opener) return resolve(null);
+      var done = false;
+      function onMsg(ev) {
+        if (!ev.data || ev.data.dubdesk !== 'payload') return;
+        done = true; window.removeEventListener('message', onMsg); resolve(ev.data.payload);
+      }
+      window.addEventListener('message', onMsg);
+      try { window.opener.postMessage({ dubdesk: 'ready' }, '*'); } catch (e) {}
+      setTimeout(function () { if (!done) { window.removeEventListener('message', onMsg); resolve(null); } }, 1500);
+    });
+  }
+
+  async function fromClipboard() {
+    try { return parse(await navigator.clipboard.readText()); } catch (e) { return null; }
+  }
+
+  function setValue(ta, text) {
+    ta.focus();
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('insertText', false, text); } catch (e) {}
+    if (!ok || ta.value !== text) {
+      var setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(ta, text);
+      ta.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste', data: text }));
+    }
+    ta.dispatchEvent(new Event('change', { bubbles: true }));
+    if (ta.parentElement) ta.parentElement.setAttribute('data-replicated-value', text);
+    ta.blur();
+    return ta.value === text;
+  }
+
+  function report(msg) {
+    try { if (window.opener) window.opener.postMessage(Object.assign({ dubdesk: 'done' }, msg), '*'); } catch (e) {}
+  }
+
+  (async function () {
+    say('Fetching captions from DubDesk…');
+    var data = await fromOpener();
+    if (!data) data = await fromClipboard();
+    if (!data) data = parse(window.prompt('DubDesk: paste the captions copied from DubDesk (Ctrl+V), then OK.') || '');
+    if (!data || !data.captions) { say('No DubDesk captions found. Click "Open Criblate" in DubDesk first, then try again.'); return; }
+
+    say('Waiting for caption boxes…');
+    var boxes = [];
+    for (var t = 0; t < 60; t++) {
+      boxes = Array.prototype.slice.call(document.querySelectorAll(BOX_SEL));
+      if (boxes.length) break;
+      await sleep(250);
+    }
+    if (!boxes.length) { say('No caption boxes found on this page. Open the transcript page (…/transcript/current) and try again.'); return; }
+
+    var caps = data.captions;
+    if (boxes.length !== caps.length &&
+        !window.confirm('DubDesk: Criblate has ' + boxes.length + ' caption boxes but DubDesk sent ' + caps.length +
+          ' captions.\n\nThey will be filled in order, so lines may drift out of alignment.\nFill anyway?')) {
+      say('Cancelled — caption counts differ (' + boxes.length + ' boxes vs ' + caps.length + ' captions).');
+      return;
+    }
+
+    var n = Math.min(boxes.length, caps.length), filled = 0, skipped = 0, failed = [];
+    for (var i = 0; i < n; i++) {
+      if (!caps[i]) { skipped++; continue; }
+      if (setValue(boxes[i], caps[i])) filled++; else failed.push(i + 1);
+      if (i % 10 === 0) { say('Filling ' + (i + 1) + ' / ' + n + '…'); await sleep(0); }
+    }
+
+    await sleep(600);
+    var lost = [];
+    for (var j = 0; j < n; j++) {
+      if (caps[j] && boxes[j].value !== caps[j]) { setValue(boxes[j], caps[j]); if (boxes[j].value !== caps[j]) lost.push(j + 1); }
+    }
+
+    var saved = false;
+    if (data.autoSave) {
+      var btn = Array.prototype.find.call(document.querySelectorAll('button'), function (b) {
+        return b.textContent.trim().toLowerCase() === 'save draft' && !b.disabled;
+      });
+      if (btn) { btn.click(); saved = true; }
+    }
+
+    var msg = 'Filled ' + filled + ' of ' + n + ' boxes.';
+    if (skipped) msg += '\n' + skipped + (skipped === 1 ? ' empty translation' : ' empty translations') + ' left untouched.';
+    if (lost.length) msg += '\n⚠ Not sticking: #' + lost.slice(0, 15).join(', #') + (lost.length > 15 ? '…' : '');
+    if (boxes.length !== caps.length) msg += '\n⚠ Count mismatch: ' + boxes.length + ' boxes vs ' + caps.length + ' captions.';
+    msg += data.autoSave ? (saved ? '\n✓ Save draft clicked.' : '\n⚠ "Save draft" button not found — save manually.') : '\nRemember to click Save draft.';
+    say(msg + '\n(click to dismiss)');
+    report({ filled: filled, total: n, boxes: boxes.length, captions: caps.length, lost: lost.length, saved: saved });
+  })();
+}
+
+function criblateBookmarkletHref() {
+  return 'javascript:' + encodeURIComponent('(' + criblateFiller.toString() + ')();void 0');
+}
+
+/**
+ * Turn whatever the user pasted into the transcript-editor URL.
+ * Accepts the transcript URL, a bare criblate.com/video/ID[/lang] URL,
+ * or just a video ID.
+ */
+function normaliseCriblateUrl(input) {
+  const raw = (input || '').trim();
+  if (!raw) return null;
+  if (/^[\w-]{11}$/.test(raw)) return `https://criblate.com/video/${raw}/hi/transcript/current`;
+
+  let u;
+  try { u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`); } catch { return null; }
+  if (!/(^|\.)criblate\.com$/i.test(u.hostname)) return null;
+
+  const m = u.pathname.match(/^\/video\/([^/]+)(?:\/([^/]+))?(\/transcript.*)?$/);
+  if (!m) return u.href;                              // some other Criblate page — trust it
+  if (m[3]) return `https://criblate.com${u.pathname}`;
+  return `https://criblate.com/video/${m[1]}/${m[2] || 'hi'}/transcript/current`;
+}
+
+/** One caption per Criblate box. Multi-line captions collapse to one line. */
+function buildCriblateCaptions() {
+  return state.captions.map(c => (c.hinglish || '').replace(/\s+/g, ' ').trim());
+}
+
+function setCriblateStatus(msg, kind = '') {
+  el.criblateStatus.textContent = msg;
+  el.criblateStatus.className = `hint${kind ? ' ' + kind : ''}`;
+}
+
+function openCriblateModal() {
+  if (!state.captions.length) {
+    showToast('Load and translate an SRT first', 'error');
+    return;
+  }
+  const caps    = buildCriblateCaptions();
+  const missing = caps.filter(t => !t).length;
+
+  const saved = localStorage.getItem('criblate_url') || '';
+  const savedId = (saved.match(/\/video\/([^/]+)/) || [])[1];
+  el.criblateUrlInput.value =
+    (state.videoId && savedId !== state.videoId)
+      ? `https://criblate.com/video/${state.videoId}/hi/transcript/current`
+      : saved;
+
+  el.criblateSummary.textContent =
+    `${caps.length} captions ready` +
+    (missing ? ` — ${missing} ${missing === 1 ? 'has' : 'have'} no translation; those Criblate boxes will be left as they are.` : '.');
+  setCriblateStatus('');
+  el.criblateModal.classList.remove('hidden');
+  el.criblateUrlInput.focus();
+  el.criblateUrlInput.select();
+}
+
+function closeCriblateModal() { el.criblateModal.classList.add('hidden'); }
+
+async function sendToCriblate() {
+  const url = normaliseCriblateUrl(el.criblateUrlInput.value);
+  if (!url) {
+    setCriblateStatus('Enter a criblate.com video URL (or the 11-character video ID).', 'error');
+    return;
+  }
+  el.criblateUrlInput.value = url;
+  localStorage.setItem('criblate_url', url);
+
+  criblatePayload = {
+    v: 1,
+    captions: buildCriblateCaptions(),
+    autoSave: el.criblateAutosave.checked,
+    title:    el.videoTitle.textContent,
+  };
+
+  // Clipboard copy is the fallback channel; failure here isn't fatal.
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(CRIBLATE_MARK + JSON.stringify(criblatePayload));
+    copied = true;
+  } catch (e) {
+    console.warn('Clipboard write failed', e);
+  }
+
+  // Named window: re-clicking reuses the same Criblate tab instead of piling up tabs.
+  const win = window.open(url, 'dubdesk-criblate');
+  if (!win) {
+    setCriblateStatus('Pop-up blocked — allow pop-ups for DubDesk, or open the URL yourself and click the bookmark.', 'error');
+    return;
+  }
+  setCriblateStatus(
+    `Criblate opened${copied ? ' and captions copied' : ''}. Click the “DubDesk → Criblate” bookmark on that tab once it has loaded.`
+  );
+}
+
+function onCriblateMessage(ev) {
+  if (!CRIBLATE_ORIGIN.test(ev.origin) || !ev.data || typeof ev.data !== 'object') return;
+
+  if (ev.data.dubdesk === 'ready') {
+    if (!criblatePayload) return;   // nothing queued — bookmarklet falls back to clipboard
+    ev.source.postMessage({ dubdesk: 'payload', payload: criblatePayload }, ev.origin);
+    return;
+  }
+
+  if (ev.data.dubdesk === 'done') {
+    const r = ev.data;
+    const problems = [];
+    if (r.lost)                 problems.push(`${r.lost} didn't stick`);
+    if (r.boxes !== r.captions) problems.push(`count mismatch ${r.boxes} vs ${r.captions}`);
+    if (!r.saved && criblatePayload?.autoSave) problems.push('draft not saved');
+    const msg = `Criblate: filled ${r.filled}/${r.total}` + (problems.length ? ` — ${problems.join(', ')}` : r.saved ? ', draft saved' : '');
+    setCriblateStatus(msg, problems.length ? 'error' : 'ok');
+    showToast(msg, problems.length ? 'error' : 'success');
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -2823,6 +3088,28 @@ function init() {
     el.downloadAllAudioBtn.addEventListener('click', downloadAllAudio);
   }
 
+  // ── Criblate upload ──────────────────────────
+  el.criblateBookmarklet.href = criblateBookmarkletHref();
+  el.criblateBookmarklet.addEventListener('click', e => {
+    e.preventDefault();
+    showToast('Drag this button to your bookmarks bar, then click it on Criblate', 'info');
+  });
+  el.copyBookmarkletBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(criblateBookmarkletHref());
+      showToast('Bookmarklet code copied — paste it as a new bookmark\'s URL', 'success');
+    } catch {
+      showToast('Could not access clipboard', 'error');
+    }
+  });
+  el.criblateBtn.addEventListener('click', openCriblateModal);
+  el.criblateOpenBtn.addEventListener('click', sendToCriblate);
+  el.criblateUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendToCriblate(); });
+  el.closeCriblate.addEventListener('click', closeCriblateModal);
+  el.cancelCriblate.addEventListener('click', closeCriblateModal);
+  el.criblateModal.addEventListener('click', e => { if (e.target === el.criblateModal) closeCriblateModal(); });
+  window.addEventListener('message', onCriblateMessage);
+
   // ── Recording ────────────────────────────────
   refreshMicList();
   if (navigator.mediaDevices?.addEventListener) {
@@ -2892,6 +3179,10 @@ function init() {
       }
       if (!el.settingsModal.classList.contains('hidden')) {
         closeModal();
+        return;
+      }
+      if (!el.criblateModal.classList.contains('hidden')) {
+        closeCriblateModal();
         return;
       }
     }

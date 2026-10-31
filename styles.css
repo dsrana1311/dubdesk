@@ -884,6 +884,54 @@ body {
   line-height: 1.33;
 }
 
+/* ── Criblate upload modal ─────────────────── */
+.modal-content.modal-wide {
+  width: min(520px, calc(100vw - 32px));
+}
+.modal-body .criblate-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.modal-body .criblate-check input {
+  width: auto;
+  margin: 0;
+}
+.criblate-steps {
+  margin: 16px 0 0 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.criblate-steps li + li {
+  margin-top: 8px;
+}
+.bookmarklet-link {
+  display: inline-block;
+  margin: 6px 0 2px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--apple-blue);
+  color: var(--white);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: grab;
+}
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--link-blue);
+  text-decoration: underline;
+  cursor: pointer;
+}
+#criblate-status.ok    { color: var(--green); }
+#criblate-status.error { color: var(--red); }
+
 .modal-footer {
   padding: 14px 20px;
   border-top: 1px solid var(--border);
