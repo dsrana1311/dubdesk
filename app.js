@@ -174,16 +174,12 @@ function autoResize(ta) {
   ta.style.height = ta.scrollHeight + 'px';
 }
 
+// The empty state's markup lives in index.html; keep a copy to restore it.
+const EMPTY_STATE_HTML = el.captionTable.innerHTML;
+
 function renderTable() {
   if (state.captions.length === 0) {
-    el.captionTable.innerHTML = `
-      <div class="empty-state" id="empty-state">
-        <div class="empty-icon">🎬</div>
-        <p>Upload an SRT file to get started</p>
-        <button id="upload-btn-empty" class="btn btn-primary">Upload SRT File</button>
-      </div>`;
-    document.getElementById('upload-btn-empty')
-      .addEventListener('click', () => el.srtFileInput.click());
+    el.captionTable.innerHTML = EMPTY_STATE_HTML;
     return;
   }
 
@@ -204,7 +200,6 @@ function renderTable() {
     const hasAny      = hasEdit || hasCont;
     const hasListen   = hasEdit || hasCont || (covered && !!contRec?.url);
     const hasDl       = hasAny;
-    const recLabel    = covered ? '✎ Edit' : '● Rec';
     const recTitle    = covered ? 'Re-record this cell only' : 'Record audio for this caption only';
 
     const isBookmarked = state.bookmark === idx;
@@ -227,10 +222,10 @@ function renderTable() {
       <div class="cell cell-time">
         <span class="length-pct" data-pct-index="${idx}">${computeLengthPct(cap)}%</span>
         <div class="row-buttons">
-          <button class="play-btn" data-time="${cap.startTime}">▶ Play</button>
-          <button class="rec-btn${hasAny ? ' has-recording' : ''}" data-rec-index="${idx}" title="${recTitle}">${recLabel}</button>
-          <button class="listen-btn${hasListen ? '' : ' hidden'}" data-listen-index="${idx}" title="Listen to recorded audio">🔊</button>
-          <button class="dl-btn${hasDl ? '' : ' hidden'}" data-dl-index="${idx}" title="Download recorded audio">⬇</button>
+          <button class="row-btn play-btn" data-time="${cap.startTime}" title="Play this caption in the video" aria-label="Play caption ${cap.index}"></button>
+          <button class="row-btn rec-btn${hasAny ? ' has-recording' : ''}${covered ? ' is-covered' : ''}" data-rec-index="${idx}" title="${recTitle}" aria-label="${recTitle}"></button>
+          <button class="row-btn listen-btn${hasListen ? '' : ' hidden'}" data-listen-index="${idx}" title="Listen to recorded audio" aria-label="Listen to recorded audio"></button>
+          <button class="row-btn dl-btn${hasDl ? '' : ' hidden'}" data-dl-index="${idx}" title="Download recorded audio" aria-label="Download recorded audio"></button>
         </div>
         <input
           type="text"
@@ -413,7 +408,7 @@ function markEditingRow(idx) {
 function updateProgress() {
   const total = state.captions.length;
   const done  = state.captions.filter(c => c.verified).length;
-  el.progressIndicator.textContent = `${done} / ${total} captions recorded`;
+  el.progressIndicator.textContent = `${done} / ${total} recorded`;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   el.verifyProgress100.style.width = `${pct}%`;
   el.verifyProgress90.style.width  = '0%';
@@ -429,6 +424,23 @@ function updateButtons() {
   el.verify90Btn.disabled    = !hasSel || !hasKey || state.isTranslating;
   el.verify100Btn.disabled   = !hasSel || !hasKey || state.isTranslating;
   if (el.recordAllBtn) el.recordAllBtn.disabled = !hasSel || state.isRecording;
+
+  el.translateBtn.title =
+    !has ? 'Upload an SRT file first'
+    : !hasKey ? 'Add your OpenAI API key in Settings first'
+    : 'Translate every caption to Hinglish';
+  const retranslateHint =
+    !hasKey ? 'Add your OpenAI API key in Settings first'
+    : !hasSel ? 'Select a caption first'
+    : null;
+  el.verify90Btn.title  = retranslateHint || 'Re-translate the selected caption at 90% length (9)';
+  el.verify100Btn.title = retranslateHint || 'Re-translate the selected caption at 100% length (0)';
+  if (el.recordAllBtn) {
+    el.recordAllBtn.title = hasSel
+      ? 'Record continuously from the selected caption (R)'
+      : 'Select a caption first';
+  }
+
   if (el.uploadHinglishBtn) {
     if (has) el.uploadHinglishBtn.classList.remove('hidden');
     else el.uploadHinglishBtn.classList.add('hidden');
@@ -463,7 +475,7 @@ function updateAvgUtility() {
     avgPctEl.textContent = '';
   } else {
     const pct = ((totalTransLen / totalOrigLen) * 100).toFixed(1);
-    avgPctEl.textContent = `(Avg: ${pct}%)`;
+    avgPctEl.textContent = `· avg ${pct}%`;
   }
 }
 
@@ -619,7 +631,7 @@ function syncTimelinePlayBtn() {
   const playing = ytPlayer &&
     typeof ytPlayer.getPlayerState === 'function' &&
     ytPlayer.getPlayerState() === 1;
-  el.timelinePlayBtn.textContent = playing ? '⏸' : '▶';
+  el.timelinePlayBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
   el.timelinePlayBtn.classList.toggle('playing', !!playing);
 }
 
@@ -658,7 +670,7 @@ const SYSTEM_PROMPT_90 =
 
 async function translateAll() {
   if (!state.apiKey) {
-    showToast('Add your OpenAI API key in ⚙ Settings first', 'error');
+    showToast('Add your OpenAI API key in Settings first', 'error');
     return;
   }
 
@@ -812,7 +824,7 @@ async function retranslateSelected(mode) {
   if (state.selectedRow === null) return;
 
   if (!state.apiKey) {
-    showToast('Add your OpenAI API key in ⚙ Settings first', 'error');
+    showToast('Add your OpenAI API key in Settings first', 'error');
     return;
   }
 
@@ -824,11 +836,11 @@ async function retranslateSelected(mode) {
   const isMode90     = mode === 90;
   const systemPrompt = isMode90 ? SYSTEM_PROMPT_90 : SYSTEM_PROMPT_100;
   const button       = isMode90 ? el.verify90Btn : el.verify100Btn;
-  const originalText = isMode90 ? 'Selected Cell 90%' : 'Selected Cell 100%';
+  const originalText = isMode90 ? '90%' : '100%';
 
   state.isTranslating = true;
   updateButtons();
-  button.textContent = 'Translating…';
+  button.textContent = '…';
 
   const ta = el.captionTable.querySelector(`.hinglish-textarea[data-index="${idx}"]`);
   if (ta) ta.classList.add('translating');
@@ -1907,8 +1919,9 @@ function updateRowRecordUI(idx) {
 
   // Rec button label
   if (recBtn) {
-    recBtn.textContent = covered ? '✎ Edit' : '● Rec';
+    recBtn.classList.toggle('is-covered', covered);
     recBtn.title       = covered ? 'Re-record this cell only' : 'Record audio for this caption only';
+    recBtn.setAttribute('aria-label', recBtn.title);
   }
 
   if (hasAny) {
@@ -2755,6 +2768,30 @@ function roundRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+// Canvas can't use CSS variables directly; read them once per theme.
+let tlPalette = null;
+
+function timelinePalette() {
+  if (tlPalette) return tlPalette;
+  const style = getComputedStyle(document.documentElement);
+  const read = name => style.getPropertyValue(name).trim();
+  tlPalette = {
+    label:      read('--tl-label'),
+    grid:       read('--tl-grid'),
+    pill:       read('--tl-pill'),
+    audio:      read('--tl-audio'),
+    audioFaint: read('--tl-audio-faint'),
+    selected:   read('--tl-selected'),
+    font:       read('--font'),
+  };
+  return tlPalette;
+}
+
+window.addEventListener('dubdesk:themechange', () => {
+  tlPalette = null;
+  renderTimeline();
+});
+
 function drawTimelineRuler(ctx, W, rulerH) {
   const sec = tl.scrollSec;
   const intervals = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200, 1800];
@@ -2762,10 +2799,11 @@ function drawTimelineRuler(ctx, W, rulerH) {
   for (const s of intervals) {
     if (s * tl.pxPerSec >= 64) { step = s; break; }
   }
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.font = '10px -apple-system, system-ui, sans-serif';
+  const palette = timelinePalette();
+  ctx.fillStyle = palette.label;
+  ctx.font = `10px ${palette.font}`;
   ctx.textBaseline = 'middle';
-  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.strokeStyle = palette.grid;
   ctx.lineWidth = 1;
 
   const firstTick = Math.ceil(sec / step) * step;
@@ -2791,7 +2829,7 @@ function drawTimelineWave(ctx, wsrc, x0, x1, cy, half, W) {
   const w = x1 - x0;
   if (w <= 0) return;
   const segN = b1 - b0;
-  ctx.fillStyle = '#34C759';
+  ctx.fillStyle = timelinePalette().audio;
   const startPx = Math.max(0, Math.floor(x0));
   const endPx = Math.min(W, Math.ceil(x1));
   const n = wave.peaks.length;
@@ -2841,11 +2879,11 @@ function renderTimeline() {
     const px1 = Math.min(W, x1);
     const pw = Math.max(2, px1 - px0);
     roundRectPath(ctx, px0, pillTop, pw, pillH, pillH / 2);
-    ctx.fillStyle = has ? '#34C759' : 'rgba(0,0,0,0.08)';
+    ctx.fillStyle = has ? timelinePalette().audio : timelinePalette().pill;
     ctx.fill();
     if (selected) {
       ctx.lineWidth = 2;
-      ctx.strokeStyle = '#0071e3';
+      ctx.strokeStyle = timelinePalette().selected;
       ctx.stroke();
     }
 
@@ -2856,7 +2894,7 @@ function renderTimeline() {
         drawTimelineWave(ctx, wsrc, x0, x1, waveCenter, halfWave, W);
       } else {
         // Audio present but peaks not computed yet — faint placeholder line.
-        ctx.fillStyle = 'rgba(52,199,89,0.3)';
+        ctx.fillStyle = timelinePalette().audioFaint;
         ctx.fillRect(px0, waveCenter - 1, pw, 2);
       }
     }
