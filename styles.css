@@ -24,6 +24,7 @@
   --col-pill-h: 30px;
   --col-grid: 38px minmax(0, 1fr) minmax(0, 1fr) 176px;
   --caption-top: calc(var(--gutter) + var(--bar-h) + 8px + var(--col-pill-h) + 6px);
+  --caption-top-no-pill: calc(var(--gutter) + var(--bar-h) + 8px);
   --caption-bottom: calc(var(--dock-h) + 28px);
 }
 
@@ -1835,7 +1836,10 @@ kbd {
   .player-video { flex: 1 1 0; width: auto; max-height: 26dvh; aspect-ratio: 16 / 9; }
   .timeline-panel { flex: 1 1 0; min-height: 0; max-height: 26dvh; }
 
-  :root { --caption-top: calc(8px + var(--col-pill-h) + 6px); }
+  :root {
+    --caption-top: calc(8px + var(--col-pill-h) + 6px);
+    --caption-top-no-pill: 8px;
+  }
   .table-col-headers { top: 8px; }
   .flow-tp { width: calc(100vw - 28px); }
 }
@@ -1843,8 +1847,13 @@ kbd {
 /* One column per caption */
 @container captions (max-width: 620px) {
   .table-col-headers { display: none; }
-  .caption-table { padding-top: 8px; padding-left: 8px; scroll-padding-top: 8px; }
-  .caption-panel::before { display: none; }
+  /* The panel also gets this narrow beside the video, still under the top bar. */
+  .caption-table,
+  .caption-panel::before { --caption-top: var(--caption-top-no-pill); }
+  .caption-table { padding-left: 8px; }
+  @media (max-width: 900px) {
+    .caption-panel::before { display: none; }
+  }
   .caption-row { grid-template-columns: 30px minmax(0, 1fr); padding-bottom: 6px; }
   .cell-check { grid-row: 1 / span 3; }
   .cell-english { grid-column: 2; padding-bottom: 2px; }
