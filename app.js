@@ -184,8 +184,8 @@ function renderTable() {
         <div class="row-buttons">
           <button class="row-btn play-btn" data-time="${cap.startTime}" title="Play this caption in the video" aria-label="Play caption ${cap.index}"></button>
           <button class="row-btn rec-btn${hasAudio ? ' has-recording' : ''}" data-rec-index="${idx}" title="${recTitle}" aria-label="${recTitle}"></button>
-          <button class="row-btn listen-btn${hasAudio ? '' : ' hidden'}" data-listen-index="${idx}" title="Listen to this line’s dub on its own (L)" aria-label="Listen to this line’s dub"></button>
-          <button class="row-btn dl-btn${hasAudio ? '' : ' hidden'}" data-dl-index="${idx}" title="Download this line, padded to line up from 0:00" aria-label="Download this line’s audio"></button>
+          <button class="row-btn listen-btn${hasAudio ? '' : ' is-off'}" data-listen-index="${idx}" title="Listen to this line’s dub on its own (L)" aria-label="Listen to this line’s dub"></button>
+          <button class="row-btn dl-btn${hasAudio ? '' : ' is-off'}" data-dl-index="${idx}" title="Download this line, padded to line up from 0:00" aria-label="Download this line’s audio"></button>
         </div>
         <input
           type="text"
@@ -1517,7 +1517,7 @@ function init() {
   // ── Keyboard shortcuts ───────────────────────
   document.addEventListener('keydown', e => {
     // Escape stops a recording or rehearsal (keeping the take), regardless of focus
-    if (e.key === 'Escape' && (state.isRecording || studio.chainTimer)) {
+    if (e.key === 'Escape' && state.isRecording) {
       e.preventDefault();
       stopSession();
       return;

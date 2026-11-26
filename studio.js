@@ -44,7 +44,7 @@ const STUDIO_DEFAULTS = {
   monitor: false,          // hear the microphone through the speakers
   latencyMs: 0,            // manual sync offset for new takes
   dubVolume: 100,          // dub audio during playback
-  afterTake: 'next',       // next | stay | chain | loop
+  afterTake: 'next',       // next | stay — a take never starts another one by itself
   autoAlign: false,
   snap: true,
   rythmoZoom: 170,         // rythmo band px per second
@@ -69,6 +69,10 @@ const settings = (() => {
   delete s.guideVolume;
   delete s.originalVolume;
   if (!['static', 'scroll'].includes(s.bandMode)) s.bandMode = 'static';
+  // "Record another take" and "Record the next line" restarted recording on
+  // their own after every take; they're gone, so recording only ever starts
+  // when you ask for it.
+  if (!['next', 'stay'].includes(s.afterTake)) s.afterTake = 'next';
   s.v = SETTINGS_VERSION;
   return s;
 })();
@@ -135,7 +139,6 @@ const studio = {
   cache: null,
   busy: false,
   starting: false,
-  chainTimer: null,
 };
 
 const pendingTakeWrites = new Set();
@@ -263,8 +266,8 @@ function refreshRow(idx) {
     rec.title = recTitle;
     rec.setAttribute('aria-label', recTitle);
   }
-  listen?.classList.toggle('hidden', !clip);
-  dl?.classList.toggle('hidden', !clip);
+  listen?.classList.toggle('is-off', !clip);
+  dl?.classList.toggle('is-off', !clip);
   if (chip) {
     chip.classList.toggle('hidden', takes.length < 2);
     if (takes.length > 1) {
@@ -706,7 +709,6 @@ async function startSession(mode, idx) {
     showToast('Select a caption first', 'info');
     return;
   }
-  if (studio.chainTimer) { clearTimeout(studio.chainTimer); studio.chainTimer = null; }
 
   const recording = mode !== 'rehearse';
   studio.starting = true;
@@ -766,6 +768,9 @@ async function startSession(mode, idx) {
   selectRow(idx);
   scrollRowToCenter(idx);
   prompterOpen(session);
+  if (mode === 'flow') {
+    showToast(`Recording from #${cap.index} onwards, line after line — Esc or Space stops. For one line, use T.`, 'info');
+  }
   renderTimeline();
   rythmo.dirty = true;
 }
@@ -862,21 +867,14 @@ async function finishSession(userStopped) {
   }
   if (!created.length || s.mode !== 'line') return;
 
-  // Park the playhead where the next thing happens, so the band, the video
-  // and the timeline are already showing it.
+  // Nothing starts another take: the next one is always yours to start.
+  // Park the playhead where you'll want it, so the band, the video and the
+  // timeline already show it. A re-take stays on its line, ready to compare
+  // takes ([ ]) or try again; a first take moves on to the next line.
   const next = s.startIdx + 1 < state.captions.length ? s.startIdx + 1 : null;
-  const after = settings.afterTake;
-  if (after === 'loop' && !userStopped) {
-    cueCaption(s.startIdx);
-    studio.chainTimer = setTimeout(() => { studio.chainTimer = null; startSession('line', s.startIdx); }, 600);
-  } else if (after === 'chain' && !userStopped && next !== null) {
-    cueCaption(next);
-    studio.chainTimer = setTimeout(() => { studio.chainTimer = null; startSession('line', next); }, 600);
-  } else if ((after === 'next' || after === 'chain') && next !== null) {
-    cueCaption(next);
-  } else {
-    cueCaption(s.startIdx);
-  }
+  const retake = takesFor(s.startIdx).length > 1;
+  if (settings.afterTake === 'next' && !retake && next !== null) cueCaption(next);
+  else cueCaption(s.startIdx);
 }
 
 /**
@@ -910,11 +908,6 @@ function abortSession(message) {
 
 /** Stop button, Esc and Space. Keeps the take. */
 function stopSession() {
-  if (studio.chainTimer) {
-    clearTimeout(studio.chainTimer);
-    studio.chainTimer = null;
-    showToast('Stopped', 'info');
-  }
   if (session) finishSession(true);
 }
 

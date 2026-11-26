@@ -1106,6 +1106,13 @@ button {
 .caption-row.selected .rec-btn.has-recording { color: var(--green-text); }
 .rec-btn.has-recording:hover { color: var(--green-text); }
 
+/* Listen and download keep their place until there's a take, so the record
+   button never moves under your pointer between takes. */
+.row-btn.is-off {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .listen-btn.playing {
   background: var(--accent);
   color: #fff;
