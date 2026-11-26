@@ -292,6 +292,10 @@ button {
 [data-icon='align']    { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 3v18M9 8h10v8H9z'/%3E%3C/svg%3E"); }
 [data-icon='fit']      { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4v16M21 4v16M7 12h10M10 9l-3 3 3 3M14 9l3 3-3 3'/%3E%3C/svg%3E"); }
 [data-icon='reset']    { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12a8 8 0 1 0 2.4-5.7L4 8.7M4 4v4.7h4.7'/%3E%3C/svg%3E"); }
+[data-icon='skip-prev'] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23000'%3E%3Crect x='5' y='5' width='2.6' height='14' rx='1'/%3E%3Cpath d='M18.2 5.6v12.8a.8.8 0 0 1-1.2.7L8.6 12.7a.8.8 0 0 1 0-1.4L17 4.9a.8.8 0 0 1 1.2.7z'/%3E%3C/svg%3E"); }
+[data-icon='skip-next'] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23000'%3E%3Crect x='16.4' y='5' width='2.6' height='14' rx='1'/%3E%3Cpath d='M5.8 5.6v12.8a.8.8 0 0 0 1.2.7l8.4-6.4a.8.8 0 0 0 0-1.4L7 4.9a.8.8 0 0 0-1.2.7z'/%3E%3C/svg%3E"); }
+[data-icon='to-start'] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 5H5v14h2M20 12H10M14 8l-4 4 4 4'/%3E%3C/svg%3E"); }
+[data-icon='to-end']   { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 5h2v14h-2M4 12h10M10 8l4 4-4 4'/%3E%3C/svg%3E"); }
 [data-icon='trash']    { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5'/%3E%3C/svg%3E"); }
 
 /* ==================== GLASS ==================== */
@@ -1402,25 +1406,116 @@ button {
 
 /* ==================== PLAYER ==================== */
 
+/* The resize bars sit in the gaps, so the video side has none of its own. */
 .player-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--gutter);
   min-width: 0;
   min-height: 0;
-  padding: calc(var(--gutter) * 2 + var(--bar-h)) var(--gutter) var(--gutter) 6px;
+  padding: calc(var(--gutter) * 2 + var(--bar-h)) var(--gutter) var(--gutter) 12px;
 }
 
 .player-video {
   position: relative;
   flex: 0 1 auto;
   width: 100%;
+  min-height: 90px;
   aspect-ratio: 16 / 9;
   max-height: 62%;
   overflow: hidden;
   border-radius: 16px;
   background: var(--surface);
 }
+
+/* Sizes chosen with the resize bars (ui.js) */
+@media (min-width: 901px) {
+  .main-content {
+    grid-template-columns: minmax(0, var(--pane-left, 58fr)) minmax(0, var(--pane-right, 42fr));
+  }
+  .player-video.user-sized {
+    flex: 0 1 var(--pane-video);
+    aspect-ratio: auto;
+    max-height: none;
+  }
+}
+
+/* ==================== RESIZE BARS ==================== */
+
+.pane-split {
+  position: relative;
+  z-index: 20;
+  flex: none;
+  outline: none;
+  touch-action: none;
+}
+
+/* A short grip shows where to grab; the full line lights up when you do. */
+.pane-split::before,
+.pane-split::after {
+  content: '';
+  position: absolute;
+  border-radius: 2px;
+  transition: background-color 140ms var(--ease), opacity 140ms var(--ease);
+}
+.pane-split::before { background: var(--rail); }
+.pane-split::after { background: var(--accent); opacity: 0; }
+.pane-split:hover::before,
+.pane-split:focus-visible::before { background: var(--muted); }
+.pane-split:focus-visible::after,
+.pane-split:active::after { opacity: 1; }
+
+.pane-split-row {
+  height: 12px;
+  margin: 0 8px;
+  cursor: row-resize;
+}
+.pane-split-row::before {
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  margin: -2px 0 0 -18px;
+}
+.pane-split-row::after {
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  margin-top: -1px;
+}
+
+.pane-split-col {
+  position: absolute;
+  top: calc(var(--gutter) * 2 + var(--bar-h));
+  bottom: var(--gutter);
+  left: calc(var(--pane-left-pct, 58) * 1% + 1px);
+  width: 10px;
+  cursor: col-resize;
+}
+.pane-split-col::before {
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 36px;
+  margin: -18px 0 0 -2px;
+}
+.pane-split-col::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+}
+
+/* No band, no bar for it */
+.rythmo.hidden + .pane-split { display: none; }
+
+/* While dragging: the cursor everywhere, and the video can't swallow the pointer. */
+body.is-resizing { user-select: none; -webkit-user-select: none; }
+body.resizing-col, body.resizing-col * { cursor: col-resize !important; }
+body.resizing-row, body.resizing-row * { cursor: row-resize !important; }
+body.is-resizing iframe { pointer-events: none; }
+body.is-resizing .pane-split:active::after { opacity: 1; }
 
 .player-placeholder {
   position: absolute;
@@ -1462,24 +1557,51 @@ button {
   border: 0;
 }
 
-/* Rythmo band: the line scrolls past a fixed sync bar under the picture. */
+/* Caption band: the current line under the picture, still or scrolling. */
 .rythmo {
   position: relative;
   flex: none;
-  height: 76px;
+  height: var(--pane-band, 96px);
   overflow: hidden;
   border-radius: 16px;
   background: var(--surface);
-  cursor: grab;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
-.rythmo:active { cursor: grabbing; }
+.rythmo.band-scroll { cursor: grab; }
+.rythmo.band-scroll:active { cursor: grabbing; }
 .rythmo canvas {
   position: absolute;
   inset: 0;
   display: block;
+}
+
+/* Line / Scroll switch: quiet until you point at the band, gone while recording */
+.band-mode {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  padding: 1px;
+  border-radius: 11px;
+  opacity: 0.55;
+  transition: opacity 160ms var(--ease);
+}
+.rythmo:hover .band-mode,
+.band-mode:focus-within { opacity: 1; }
+.rythmo.in-session .band-mode { display: none; }
+.band-mode .seg-btn {
+  min-width: 0;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+.band-mode .seg-btn[aria-pressed='true'] {
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  color: var(--fg);
+  font-weight: 600;
 }
 
 /* Timeline */
@@ -1488,8 +1610,8 @@ button {
   flex: 1 1 0;
   flex-direction: column;
   gap: 8px;
-  min-height: 150px;
-  padding: 8px 10px 10px 12px;
+  min-height: 140px;
+  padding: 8px 10px 10px 10px;
   border-radius: 16px;
   background: var(--surface);
 }
@@ -1497,24 +1619,31 @@ button {
 .timeline-header {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 6px 10px;
   min-width: 0;
 }
 
-.timeline-title {
+/* Transport: caption-by-caption navigation around play / pause */
+.transport {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  gap: 1px;
   min-width: 0;
 }
+.transport .timecode { margin-left: 8px; }
 
-.timeline-label {
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
+.timeline-play-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background: var(--field);
+  color: var(--fg);
 }
+.timeline-play-btn:hover:not(:disabled) { background: var(--active); }
+.timeline-play-btn.playing { background: var(--accent-tint); color: var(--accent-text); }
 
 /* Studio-style timecode: fixed-width digits so it doesn't jitter as it runs */
 .timecode {
@@ -1687,25 +1816,6 @@ input[type='range'] {
   pointer-events: none;
 }
 
-.timeline-play-btn {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--fg);
-  cursor: pointer;
-  transition: transform 420ms var(--spring);
-}
-.timeline-play-btn:hover { transform: scale(1.07); }
-.timeline-play-btn:active { transform: scale(0.92); transition-duration: 90ms; }
 .timeline-play-icon { width: 14px; height: 14px; }
 
 .timeline-scrollbar {
@@ -2141,7 +2251,7 @@ kbd {
   z-index: 900;
   display: flex;
   flex-direction: column;
-  width: calc(58vw - 28px);
+  width: calc(var(--pane-left-pct, 58) * 1vw - 28px);
   height: min(360px, 46vh);
   overflow: hidden;
   border-radius: 22px;
@@ -2384,10 +2494,18 @@ kbd {
   .dock-divider { display: none; }
 }
 
-/* A narrow timeline drops the word labels on its tools. */
-@media (max-width: 1240px) {
-  .timeline-label { display: none; }
+/* The timeline column can be dragged narrow, so it adapts to its own width. */
+.timeline-panel {
+  container-type: inline-size;
+  container-name: timeline;
+}
+@container timeline (max-width: 560px) {
   .ci-field { display: none; }
+  .transport .timecode { margin-left: 4px; font-size: 11px; }
+}
+@container timeline (max-width: 430px) {
+  .tool-sep { display: none; }
+  #tl-fit { display: none; }
 }
 
 @media (max-width: 1320px) {
@@ -2419,11 +2537,14 @@ kbd {
     order: -1;
     flex-direction: row;
     flex-wrap: wrap;
+    gap: var(--gutter);
     padding: calc(var(--gutter) * 2 + var(--bar-h)) var(--gutter) 6px;
   }
   .player-video { flex: 1 1 0; width: auto; max-height: 26dvh; aspect-ratio: 16 / 9; }
   .timeline-panel { flex: 1 1 0; min-height: 0; max-height: 26dvh; }
-  .rythmo { order: 3; flex: 1 1 100%; height: 60px; }
+  .rythmo { order: 3; flex: 1 1 100%; height: 72px; }
+  /* Stacked, the panes size themselves; the resize bars come back on a wider window. */
+  .pane-split { display: none; }
 
   :root {
     --caption-top: calc(8px + var(--col-pill-h) + 6px);

@@ -463,7 +463,8 @@ function escHtml(str) {
 
 let ytPlayer    = null;
 let ytReady     = false;
-let pendingSeek = null;
+let pendingSeek = null;   // a seek asked for before the player was ready
+let pendingPlay = true;   // …and whether it should play from there
 
 // Load YouTube IFrame API script
 function loadYTApi() {
@@ -516,9 +517,16 @@ function createPlayer(videoId) {
       onReady() {
         onPlayerReady();
         if (pendingSeek !== null) {
-          ytPlayer.seekTo(pendingSeek, true);
-          ytPlayer.playVideo();
+          // seekTo on a fresh player starts it, so a seek that shouldn't
+          // play is parked in the transport until playback begins.
+          if (pendingPlay) {
+            ytPlayer.seekTo(pendingSeek, true);
+            ytPlayer.playVideo();
+          } else {
+            transport.park(pendingSeek);
+          }
           pendingSeek = null;
+          pendingPlay = true;
         }
       },
     },
@@ -1626,18 +1634,11 @@ function init() {
       return;
     }
 
-    if (e.key === 'ArrowDown' && state.selectedRow !== null) {
+    // ↑ / ↓ — previous / next caption, with the playhead cued to its start
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && state.captions.length && !state.isRecording) {
       e.preventDefault();
-      const next = Math.min(state.selectedRow + 1, state.captions.length - 1);
-      selectRow(next);
-      rowEl(next)?.scrollIntoView({ block: 'nearest' });
-    }
-
-    if (e.key === 'ArrowUp' && state.selectedRow !== null) {
-      e.preventDefault();
-      const prev = Math.max(state.selectedRow - 1, 0);
-      selectRow(prev);
-      rowEl(prev)?.scrollIntoView({ block: 'nearest' });
+      stepCaption(e.key === 'ArrowDown' ? 1 : -1);
+      return;
     }
 
     // 9 = re-translate selected (90% mode), 0 = re-translate selected (100% mode)

@@ -61,6 +61,16 @@
           <div class="shortcut-row"><dt><kbd>L</kbd></dt><dd>Listen to the line’s dub on its own</dd></div>
         </dl>
 
+        <h3 class="shortcut-heading">Navigation</h3>
+        <dl class="shortcut-list">
+          <div class="shortcut-row"><dt><kbd>Space</kbd></dt><dd>Play / pause, with the dub</dd></div>
+          <div class="shortcut-row"><dt><kbd>Enter</kbd></dt><dd>Play the selected caption <span class="shortcut-note">(stops at its end)</span></dd></div>
+          <div class="shortcut-row"><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Previous / next caption <span class="shortcut-note">(the playhead goes to its start)</span></dd></div>
+          <div class="shortcut-row"><dt><kbd>I</kbd> <kbd>O</kbd></dt><dd>Go to the caption’s start / end</dd></div>
+          <div class="shortcut-row"><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Step one frame back / forward <span class="shortcut-note">(with Shift: one second)</span></dd></div>
+          <div class="shortcut-row"><dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>Go to the start / end of the timeline</dd></div>
+        </dl>
+
         <h3 class="shortcut-heading">Clip editing</h3>
         <dl class="shortcut-list">
           <div class="shortcut-row"><dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Nudge the clip 10 ms earlier / later <span class="shortcut-note">(with Shift: 100 ms)</span></dd></div>
@@ -74,9 +84,7 @@
 
         <h3 class="shortcut-heading">Captions</h3>
         <dl class="shortcut-list">
-          <div class="shortcut-row"><dt><kbd>Space</kbd></dt><dd>Play / pause, with the dub</dd></div>
-          <div class="shortcut-row"><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Move between captions <span class="shortcut-note">(move within the text while editing)</span></dd></div>
-          <div class="shortcut-row"><dt><kbd>E</kbd></dt><dd>Edit selected caption's translation</dd></div>
+          <div class="shortcut-row"><dt><kbd>E</kbd></dt><dd>Edit selected caption's translation <span class="shortcut-note">(↑ ↓ then move within the text)</span></dd></div>
           <div class="shortcut-row">
             <dt><kbd>Ctrl</kbd> + <kbd>↑</kbd> <kbd>↓</kbd></dt>
             <dd>Move to previous / next caption <span class="shortcut-note">(stays in edit mode)</span></dd>
@@ -92,6 +100,12 @@
           </div>
           <div class="shortcut-row"><dt><kbd>9</kbd> <kbd>0</kbd></dt><dd>Re-translate selected (90% / 100% length)</dd></div>
           <div class="shortcut-row"><dt><kbd>?</kbd></dt><dd>Show this help</dd></div>
+        </dl>
+
+        <h3 class="shortcut-heading">Layout</h3>
+        <dl class="shortcut-list">
+          <div class="shortcut-row"><dt>Drag</dt><dd>The bars between captions, video, band and timeline resize them <span class="shortcut-note">(remembered in this browser)</span></dd></div>
+          <div class="shortcut-row"><dt>Double-click</dt><dd>A resize bar puts that pane back to its default size</dd></div>
         </dl>
         <p class="hint">Single-key shortcuts are ignored while you're typing in a text field,
            so they never interfere with editing. <kbd>Ctrl</kbd>+<kbd>B</kbd> always works; inside a text field,
@@ -166,9 +180,16 @@
 
         <section class="set-section">
           <h3>Prompter</h3>
-          <label class="set-check"><input type="checkbox" id="set-rythmo"> Rythmo band under the video</label>
-          <p class="hint">The line scrolls past a sync bar: say each word as it crosses. You see every word coming, so there’s no reaction delay.</p>
-          <label class="set-check"><input type="checkbox" id="set-overlay"> Large teleprompter while recording</label>
+          <label class="set-check"><input type="checkbox" id="set-rythmo"> Caption band under the video</label>
+          <div class="set-row">
+            <label for="set-band">Band style</label>
+            <select id="set-band" class="set-select">
+              <option value="static">Line — words stand still, a highlight follows them</option>
+              <option value="scroll">Scroll — words move past a sync line (rythmo)</option>
+            </select>
+          </div>
+          <p class="hint">Line is the easiest to read: the whole line waits for you, an amber bar fills up to the moment it starts, and the next line shows on the right. Drag the band’s edges to make it taller and the text grows with it.</p>
+          <label class="set-check"><input type="checkbox" id="set-overlay"> Also open a large teleprompter window while recording</label>
         </section>
 
         <section class="set-section">
@@ -183,13 +204,7 @@
             </select>
           </div>
           <label class="set-check"><input type="checkbox" id="set-autoalign"> Move new takes so the speech starts on the caption</label>
-          <div class="set-row">
-            <label for="set-guide">Original audio while recording</label>
-            <div class="set-range">
-              <input type="range" id="set-guide" min="0" max="100" step="5">
-              <output id="set-guide-value" for="set-guide">100%</output>
-            </div>
-          </div>
+          <p class="hint">The video’s sound is left exactly as you set it with YouTube’s speaker icon — recording never turns it back on. Use headphones if you want to hear it while you record.</p>
           <div class="set-row">
             <label for="set-latency">Sync offset</label>
             <div class="num-field">
@@ -324,6 +339,10 @@
 
   <main class="main-content">
 
+    <!-- Drag to share the width between the captions and the video side -->
+    <div class="pane-split pane-split-col" id="split-col" role="separator" tabindex="0"
+      aria-orientation="vertical" aria-label="Resize the captions and the video" title="Drag to resize · double-click to reset"></div>
+
     <!-- Captions: the page's content, scrolling under the floating glass -->
     <section class="caption-panel" aria-label="Captions">
       <div class="table-col-headers glass" data-glass>
@@ -394,7 +413,7 @@
     </section>
 
     <!-- Video and dub timeline -->
-    <aside class="player-panel" aria-label="Video, rythmo band and dub timeline">
+    <aside class="player-panel" aria-label="Video, caption band and dub timeline">
       <div class="player-video">
         <div id="player-placeholder" class="player-placeholder">
           <div class="placeholder-icon" data-icon="play" aria-hidden="true"></div>
@@ -403,16 +422,30 @@
         <div id="youtube-iframe-wrapper" class="youtube-iframe-wrapper hidden"></div>
       </div>
 
-      <div id="rythmo" class="rythmo hidden" aria-hidden="true"
-        title="Rythmo band: say each word as it crosses the line. Drag to scrub, scroll to zoom.">
+      <div class="pane-split pane-split-row" id="split-video" role="separator" tabindex="0"
+        aria-orientation="horizontal" aria-label="Resize the video" title="Drag to resize · double-click to reset"></div>
+
+      <div id="rythmo" class="rythmo hidden" aria-hidden="true">
         <canvas id="rythmo-canvas"></canvas>
+        <div class="band-mode seg" role="group" aria-label="Caption band style">
+          <button type="button" class="seg-btn" data-band="static" title="Line stands still; a highlight follows the words">Line</button>
+          <button type="button" class="seg-btn" data-band="scroll" title="Words scroll past a sync line (rythmo band)">Scroll</button>
+        </div>
       </div>
+
+      <div class="pane-split pane-split-row" id="split-band" role="separator" tabindex="0"
+        aria-orientation="horizontal" aria-label="Resize the caption band" title="Drag to resize · double-click to reset"></div>
 
       <div class="timeline-panel">
         <div class="timeline-header">
-          <div class="timeline-title">
-            <div class="timeline-label">Dub timeline</div>
-            <span id="timecode" class="timecode" aria-label="Playhead position">00:00:00.000</span>
+          <div class="transport" role="group" aria-label="Transport">
+            <button id="tp-prev" class="tool-btn" data-icon="skip-prev" title="Previous caption (↑)" aria-label="Previous caption"></button>
+            <button id="tp-start" class="tool-btn" data-icon="to-start" title="Go to caption start (I)" aria-label="Go to caption start"></button>
+            <button id="timeline-play-btn" class="tool-btn timeline-play-btn" title="Play / pause (Space) · play this caption (Enter)" aria-label="Play"><span class="timeline-play-icon"></span></button>
+            <button id="tp-end" class="tool-btn" data-icon="to-end" title="Go to caption end (O)" aria-label="Go to caption end"></button>
+            <button id="tp-next" class="tool-btn" data-icon="skip-next" title="Next caption (↓)" aria-label="Next caption"></button>
+            <span id="timecode" class="timecode" aria-label="Playhead position"
+              title="Step one frame with ← →, one second with Shift+← →">00:00:00.000</span>
           </div>
           <div class="timeline-tools" role="toolbar" aria-label="Timeline">
             <button id="tl-undo" class="tool-btn" data-icon="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled></button>
@@ -425,15 +458,15 @@
               <div class="menu-pop glass mix-pop" data-glass hidden>
                 <label class="mix-row">
                   <span>Original</span>
-                  <input type="range" id="mix-original" min="0" max="100" step="1" aria-label="Original audio volume">
-                  <output id="mix-original-value">100</output>
+                  <input type="range" id="mix-original" min="0" max="100" step="1" aria-label="Original video volume">
+                  <output id="mix-original-value">—</output>
                 </label>
                 <label class="mix-row">
                   <span>Dub</span>
                   <input type="range" id="mix-dub" min="0" max="100" step="1" aria-label="Dub volume">
                   <output id="mix-dub-value">100</output>
                 </label>
-                <p class="mix-hint">The dub plays in sync with the video. Turn the original down to hear only your voice.</p>
+                <p class="mix-hint">Original is the video player’s own volume: mute it with YouTube’s speaker icon or here, and it stays that way while you record. The dub plays in sync with the video.</p>
               </div>
             </div>
             <span class="tool-sep" aria-hidden="true"></span>
@@ -468,7 +501,6 @@
           <canvas id="timeline-canvas"></canvas>
           <div id="timeline-playhead" class="timeline-playhead hidden"></div>
           <div id="timeline-empty" class="timeline-empty">Upload an SRT to see the timeline</div>
-          <button id="timeline-play-btn" class="timeline-play-btn glass" data-glass title="Play / Pause (Space)" aria-label="Play"><span class="timeline-play-icon"></span></button>
         </div>
         <div id="timeline-scrollbar" class="timeline-scrollbar">
           <div id="timeline-scrollbar-thumb" class="timeline-scrollbar-thumb"></div>

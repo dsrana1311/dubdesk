@@ -4,12 +4,14 @@
  * clock so it stays locked to the picture through seeks, buffering and
  * slow-motion recording:
  *
- *   rythmo band  — the line scrolls under the video past a fixed sync line;
- *                  say each word as it crosses. Because you can see every word
- *                  coming, there is no reaction delay to make up for.
- *   teleprompter — the large overlay: the current line big, the next ones
- *                  below, a streamer that fills up to the moment the line
- *                  starts, and a 3-2-1 countdown during the pre-roll.
+ *   caption band — under the video, in one of two styles:
+ *                  line:   the current line stands still and a highlight
+ *                          follows the words, with a bar filling into the
+ *                          line and the next line shown to read ahead;
+ *                  scroll: the rythmo band — the words scroll past a sync
+ *                          line and you say each one as it crosses.
+ *   teleprompter — an optional large window: the current line big, the next
+ *                  ones below, and a 3-2-1 countdown during the pre-roll.
  *   caption row  — the selected row's words light up as they are due.
  */
 
@@ -331,7 +333,10 @@ function initRythmo() {
   rythmo.ctx = rythmo.canvas.getContext('2d');
   new ResizeObserver(resizeRythmo).observe(rythmo.wrap);
 
+  const scrolling = () => settings.bandMode === 'scroll';
+
   rythmo.wrap.addEventListener('wheel', e => {
+    if (!scrolling()) return;
     e.preventDefault();
     const f = e.deltaY < 0 ? 1.12 : 1 / 1.12;
     settings.rythmoZoom = clamp(settings.rythmoZoom * f, 60, 480);
@@ -339,9 +344,18 @@ function initRythmo() {
     rythmo.dirty = true;
   }, { passive: false });
 
-  // Drag to scrub; click to bring the clicked word to the sync line.
+  // Line / Scroll switch in the band's corner
+  const modes = rythmo.wrap.querySelector('.band-mode');
+  modes.addEventListener('pointerdown', e => e.stopPropagation());
+  modes.addEventListener('click', e => {
+    const b = e.target.closest('[data-band]');
+    if (b) setBandMode(b.dataset.band);
+  });
+  showBandMode();
+
+  // Scroll style: drag to scrub; click to bring the clicked word to the sync line.
   rythmo.wrap.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || session) return;
+    if (e.button !== 0 || session || !scrolling()) return;
     rythmo.drag = { x: e.clientX, vt: transport.now(), moved: false, wasPlaying: transport.isPlaying() };
     try { rythmo.wrap.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
   });
@@ -377,6 +391,26 @@ function initRythmo() {
   });
 }
 
+function setBandMode(mode) {
+  settings.bandMode = mode === 'scroll' ? 'scroll' : 'static';
+  saveSettings();
+  showBandMode();
+  rythmo.dirty = true;
+}
+
+function showBandMode() {
+  const scroll = settings.bandMode === 'scroll';
+  rythmo.wrap.classList.toggle('band-scroll', scroll);
+  rythmo.wrap.title = scroll
+    ? 'Rythmo band: say each word as it crosses the line. Drag to scrub, scroll to zoom.'
+    : 'The line stands still; the highlight follows the words as they’re due. The next line is on the right.';
+  rythmo.wrap.querySelectorAll('[data-band]').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.band === settings.bandMode));
+  });
+  const select = document.getElementById('set-band');
+  if (select) select.value = settings.bandMode;
+}
+
 function resizeRythmo() {
   const r = rythmo.wrap.getBoundingClientRect();
   rythmo.W = r.width;
@@ -402,8 +436,169 @@ function updateRythmoVisibility() {
 function rythmoFrame(p) {
   updateRythmoVisibility();
   if (!rythmo.visible || !rythmo.ctx) return;
+  const busy = !!session;
+  if (rythmo.wrap.classList.contains('in-session') !== busy) {
+    rythmo.wrap.classList.toggle('in-session', busy);
+    rythmo.dirty = true;
+  }
   if (!(rythmo.dirty || transport.isPlaying() || session || rythmo.drag)) return;
   drawRythmo(transport.now(p));
+}
+
+// ── Line style ──────────────────────────────
+
+/** Which caption the band shows: the session's, the one playing, or the next one due. */
+function bandCaption(vt) {
+  const caps = state.captions;
+  if (!caps.length) return -1;
+  if (session) return session.display ?? session.startIdx;
+  const inside = caps.findIndex(c => vt >= c.startTime && vt < c.endTime);
+  if (inside !== -1) return inside;
+  if (!transport.isPlaying() && state.selectedRow !== null) return state.selectedRow;
+  const next = caps.findIndex(c => c.endTime > vt);
+  return next === -1 ? caps.length - 1 : next;
+}
+
+const cueLayouts = new Map();
+
+/** Wrap a line into the band at the largest size that fits its height. */
+function cueLayout(words, italic, maxW, maxH, family) {
+  const key = `${italic ? 'i' : 'n'}|${Math.round(maxW)}|${Math.round(maxH)}|${words.join(' ')}`;
+  let layout = cueLayouts.get(key);
+  if (layout) return layout;
+  const ctx = rythmo.ctx;
+  for (let fs = Math.round(clamp(maxH * 0.62, 15, 58)); ; fs--) {
+    ctx.font = `${italic ? 'italic 500' : '600'} ${fs}px ${family}`;
+    const space = ctx.measureText(' ').width;
+    const lines = [[]];
+    let x = 0;
+    words.forEach((word, k) => {
+      const w = ctx.measureText(word).width;
+      if (x > 0 && x + w > maxW) { lines.push([]); x = 0; }
+      lines[lines.length - 1].push({ k, x, w });
+      x += w + space;
+    });
+    const lineH = Math.round(fs * 1.24);
+    if (lines.length * lineH <= maxH || fs <= 12) {
+      layout = { fs, lines, lineH, font: ctx.font };
+      break;
+    }
+  }
+  if (cueLayouts.size > 80) cueLayouts.clear();
+  cueLayouts.set(key, layout);
+  return layout;
+}
+
+function fitText(ctx, text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (ctx.measureText(`${text.slice(0, mid)}…`).width <= maxW) lo = mid; else hi = mid - 1;
+  }
+  return `${text.slice(0, lo).trimEnd()}…`;
+}
+
+/**
+ * The line style: the words stay put, so they're easy to read, and the timing
+ * comes from a highlight that moves through them, a bar that fills into the
+ * line and then across it, and the next line waiting on the right.
+ */
+function drawCueLine(vt) {
+  const { ctx, W, H } = rythmo;
+  const P = rythmoPalette();
+  const caps = state.captions;
+  const idx = bandCaption(vt);
+  const cap = caps[idx];
+  if (!cap) return;
+
+  const s = session;
+  const recording = !!s?.recording;
+  const running = transport.isPlaying() || !!s;
+  const own = (cap.hinglish || '').trim();
+  const plan = wordPlan(own || cap.text);
+  const dur = Math.max(0.05, cap.endTime - cap.startTime);
+  const lead = cap.startTime - vt;
+  let k = -1;
+  if (vt >= cap.endTime) k = plan.words.length;
+  else if (vt >= cap.startTime) k = activeWordIndex(plan, (vt - cap.startTime) / dur);
+  const pad = 16;
+
+  // Top row: state, line number, timing — and the next line to read ahead
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  const my = 13;
+  let x = pad;
+  if (s) {
+    const label = recording ? 'REC' : 'REHEARSAL';
+    ctx.font = `700 9.5px ${P.font}`;
+    const w = ctx.measureText(label).width + 10;
+    ctx.fillStyle = recording ? P.syncRec : P.sync;
+    roundRectPath(ctx, x, my - 7, w, 14, 4);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(label, x + 5, my + 0.5);
+    x += w + 8;
+  }
+  let status;
+  if (s && !s.started) status = 'cueing…';
+  else if (lead > 0 && running) status = `starts in ${lead.toFixed(1)} s`;
+  else if (vt >= cap.startTime && vt < cap.endTime) status = `${(vt - cap.startTime).toFixed(1)} / ${dur.toFixed(1)} s`;
+  else status = `${dur.toFixed(1)} s`;
+  const head = `#${cap.index}   ${status}`;
+  ctx.font = `600 11px ${P.font}`;
+  ctx.fillStyle = lead > 0 && lead <= STREAMER_SEC && running ? P.beep : P.num;
+  ctx.fillText(head, x, my);
+  x += ctx.measureText(head).width + 24;
+
+  const rightEdge = W - pad - (s ? 0 : 112);
+  let right = '';
+  if (s?.mode === 'line') right = s.recording ? `take ${takesFor(idx).length + 1}` : '';
+  else if (caps[idx + 1]) right = `Next ›  ${(caps[idx + 1].hinglish || caps[idx + 1].text || '').trim()}`;
+  if (right && rightEdge - x > 70) {
+    ctx.font = `500 11.5px ${P.font}`;
+    ctx.fillStyle = P.num;
+    ctx.textAlign = 'right';
+    ctx.fillText(fitText(ctx, right, rightEdge - x), rightEdge, my);
+    ctx.textAlign = 'left';
+  }
+
+  // The line itself, as large as fits
+  const top = 26;
+  const area = Math.max(14, H - 16 - top);
+  const layout = cueLayout(plan.words, !own, W - pad * 2, area, P.font);
+  ctx.font = layout.font;
+  const y0 = top + (area - layout.lines.length * layout.lineH) / 2 + layout.lineH / 2;
+  layout.lines.forEach((line, li) => {
+    const y = y0 + li * layout.lineH;
+    for (const w of line) {
+      ctx.fillStyle = !own ? P.fallback : w.k < k ? P.past : w.k === k ? P.now : P.word;
+      ctx.fillText(plan.words[w.k], pad + w.x, y);
+      if (own && w.k === k) ctx.fillRect(pad + w.x, y + layout.fs * 0.56, w.w, 2);
+    }
+  });
+
+  // Amber fills toward the line's start; then the line's progress
+  const barY = H - 8;
+  const barW = W - pad * 2;
+  ctx.fillStyle = P.bar;
+  roundRectPath(ctx, pad, barY, barW, 3, 1.5);
+  ctx.fill();
+  let f;
+  let color;
+  if (lead > 0) {
+    f = running ? clamp(1 - lead / STREAMER_SEC, 0, 1) : 0;
+    color = P.beep;
+  } else {
+    f = clamp((vt - cap.startTime) / dur, 0, 1);
+    color = recording ? P.syncRec : P.now;
+  }
+  if (f > 0) {
+    ctx.fillStyle = color;
+    roundRectPath(ctx, pad, barY, Math.max(3, barW * f), 3, 1.5);
+    ctx.fill();
+  }
 }
 
 function measureWord(word) {
@@ -420,6 +615,13 @@ function drawRythmo(vt) {
   rythmo.dirty = false;
   const { ctx, W, H, dpr } = rythmo;
   if (!W || !H) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if (settings.bandMode !== 'scroll') {
+    drawCueLine(vt);
+    return;
+  }
+
   const P = rythmoPalette();
   const pps = settings.rythmoZoom;
   const sync = Math.round(W * SYNC_AT);
@@ -429,13 +631,13 @@ function drawRythmo(vt) {
   const barY = H - 11;
   const recording = !!session?.recording;
 
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = P.shade;
   ctx.fillRect(0, 0, sync, H);
 
-  const wordFont = `600 20px ${P.font}`;
-  const italicFont = `italic 500 18px ${P.font}`;
+  // Text grows with the band, so a taller band is easier to read.
+  const fs = Math.round(clamp(H * 0.26, 16, 30));
+  const wordFont = `600 ${fs}px ${P.font}`;
+  const italicFont = `italic 500 ${fs - 2}px ${P.font}`;
   const numFont = `600 10px ${P.font}`;
   if (rythmo.font !== wordFont) {
     rythmo.font = wordFont;

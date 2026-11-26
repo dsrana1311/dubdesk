@@ -135,6 +135,16 @@ function resizeTimeline() {
   drawTimeline();
 }
 
+/** Scroll the timeline so time t is in view (a third of the way in). */
+function revealTime(t) {
+  if (!tl.cssW || !tl.pxPerSec) return;
+  const x = tX(t);
+  if (x >= 12 && x <= tl.cssW - 12) return;
+  tl.scrollSec = t - (tl.cssW * 0.33) / tl.pxPerSec;
+  clampTimelineScroll();
+  renderTimeline();
+}
+
 /** Zoom around a point (the playhead, or the middle, by default). */
 function zoomTimeline(factor, anchorX) {
   if (!tl.cssW) return;

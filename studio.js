@@ -25,27 +25,33 @@
 
 const STUDIO_SETTINGS_KEY = 'dubdesk_studio';
 
+const SETTINGS_VERSION = 2;
+
 const STUDIO_DEFAULTS = {
+  v: SETTINGS_VERSION,
   preRoll: 2,              // s of picture before the line
   postRoll: 1,             // s kept rolling after the line
   beeps: true,             // three ADR beeps leading into the line
   pace: 1,                 // 1, 0.75 or 0.5: video speed while recording
-  rythmo: true,            // rythmo band under the video
-  overlay: true,           // large teleprompter while recording
+  rythmo: true,            // caption band under the video
+  bandMode: 'static',      // static: the line stands still, a highlight follows the words
+                           // scroll: the words scroll past a sync line (rythmo band)
+  overlay: false,          // large teleprompter window while recording (opt-in)
   echoCancellation: false,
   noiseSuppression: false,
   autoGainControl: false,
   inputChannel: 0,         // 0 = input 1, 1 = input 2, -1 = mix
   monitor: false,          // hear the microphone through the speakers
   latencyMs: 0,            // manual sync offset for new takes
-  guideVolume: 100,        // original audio while recording, 0–100
-  originalVolume: 100,     // original audio during playback
   dubVolume: 100,          // dub audio during playback
   afterTake: 'next',       // next | stay | chain | loop
   autoAlign: false,
   snap: true,
   rythmoZoom: 170,         // rythmo band px per second
 };
+
+// The original video's sound is never set here: the YouTube player's own
+// speaker and volume control decide it, during playback and recording alike.
 
 const settings = (() => {
   let saved = {};
@@ -57,6 +63,13 @@ const settings = (() => {
     if (old > 0 && old < 1) s.pace = old <= 0.62 ? 0.5 : old <= 0.87 ? 0.75 : 1;
   }
   if (![1, 0.75, 0.5].includes(s.pace)) s.pace = 1;
+  // Version 1 opened a teleprompter window for every take and set the
+  // video's volume itself; both are gone.
+  if ((saved.v || 1) < 2) s.overlay = false;
+  delete s.guideVolume;
+  delete s.originalVolume;
+  if (!['static', 'scroll'].includes(s.bandMode)) s.bandMode = 'static';
+  s.v = SETTINGS_VERSION;
   return s;
 })();
 
@@ -304,6 +317,7 @@ const transport = {
   internalRate: 1,
   seekHold: null,
   pauseHold: 0,
+  parked: null,        // playhead set before the video was started
 
   hasVideo() {
     return !!(ytPlayer && typeof ytPlayer.getPlayerState === 'function' && typeof ytPlayer.getCurrentTime === 'function');
@@ -339,6 +353,19 @@ const transport = {
       rate = ytPlayer.getPlaybackRate() || 1;
     } catch { return; }
     this.ytState = st;
+
+    // A playhead parked while the video wasn't started: show it, and apply it
+    // as soon as the video starts, even from YouTube's own play button.
+    if (this.parked !== null) {
+      if (st === -1 || st === 5 || st === 0) {
+        raw = this.parked;
+      } else {
+        const t = this.parked;
+        this.parked = null;
+        try { ytPlayer.seekTo(t, true); } catch { /* player gone */ }
+        this.seekHold = { t, until: p + 800 };
+      }
+    }
 
     // Right after a seek the player can still report the old position.
     if (this.seekHold) {
@@ -390,7 +417,15 @@ const transport = {
   play() {
     this.pauseHold = 0;
     if (this.hasVideo()) {
-      try { ytPlayer.playVideo(); } catch { /* player gone */ }
+      try {
+        if (this.parked !== null) {
+          const t = this.parked;
+          this.parked = null;
+          ytPlayer.seekTo(t, true);
+          this.seekHold = { t, until: performance.now() + 800 };
+        }
+        ytPlayer.playVideo();
+      } catch { /* player gone */ }
       return;
     }
     if (ytPlayer || this.playing) return;   // a player that is still loading plays once ready
@@ -428,16 +463,52 @@ const transport = {
     this.perf = performance.now();
     this.epoch++;
     if (this.hasVideo()) {
+      // Seeking a video that hasn't started (or has ended) makes YouTube play
+      // it, so just park the playhead until it does play.
+      if (!play && this.notStarted()) {
+        this.park(t);
+        return;
+      }
+      const wasPlaying = this.playing || this.ytState === 1;
+      this.parked = null;
       this.seekHold = { t, until: performance.now() + 800 };
       try {
         ytPlayer.seekTo(t, true);
-        if (play) { this.pauseHold = 0; ytPlayer.playVideo(); }
+        if (play) {
+          this.pauseHold = 0;
+          ytPlayer.playVideo();
+        } else if (!wasPlaying) {
+          this.holdStill();
+        }
       } catch { /* player gone */ }
-    } else if (ytPlayer) {
+    } else if (ytPlayer || state.videoId) {
+      // The player is still loading: it picks this up when it's ready.
       pendingSeek = t;
+      pendingPlay = play;
     } else if (play && !this.playing) {
       this.play();
     }
+  },
+
+  /** Unstarted, cued or ended: states where a seek would start playback. */
+  notStarted() {
+    let st = this.ytState;
+    try { st = ytPlayer.getPlayerState(); } catch { /* use the last one */ }
+    return st === -1 || st === 5 || st === 0;
+  },
+
+  park(t) {
+    this.parked = t;
+    this.vt = t;
+    this.perf = performance.now();
+    this.seekHold = null;
+    this.epoch++;
+  },
+
+  /** A seek from paused can bounce into play on some players; pause it back. */
+  holdStill() {
+    this.pauseHold = performance.now() + 500;
+    try { ytPlayer.pauseVideo(); } catch { /* player gone */ }
   },
 
   /** Drag-scrubbing: cheap seeks while moving, an exact one on release. */
@@ -447,8 +518,14 @@ const transport = {
     this.perf = performance.now();
     this.epoch++;
     if (this.hasVideo()) {
+      if (this.notStarted()) { this.park(t); return; }
+      this.parked = null;
+      const wasPlaying = this.playing || this.ytState === 1;
       this.seekHold = { t, until: performance.now() + 800 };
-      try { ytPlayer.seekTo(t, !!final); } catch { /* player gone */ }
+      try {
+        ytPlayer.seekTo(t, !!final);
+        if (!wasPlaying) this.holdStill();
+      } catch { /* player gone */ }
     }
   },
 
@@ -479,17 +556,31 @@ const transport = {
   },
 };
 
+/**
+ * The original's level as the YouTube player has it: 0 when muted, null
+ * without a player. Only the Mix slider ever changes it, because you moved it.
+ */
+function originalVolume() {
+  if (!transport.hasVideo()) return null;
+  try { return ytPlayer.isMuted() ? 0 : Math.round(ytPlayer.getVolume()); } catch { return null; }
+}
+
 function setOriginalVolume(v) {
   if (!transport.hasVideo()) return;
   try {
-    ytPlayer.setVolume(clamp(Math.round(v), 0, 100));
-    if (v > 0 && ytPlayer.isMuted?.()) ytPlayer.unMute();
+    v = clamp(Math.round(v), 0, 100);
+    if (v === 0) {
+      ytPlayer.mute();
+    } else {
+      ytPlayer.setVolume(v);
+      if (ytPlayer.isMuted()) ytPlayer.unMute();
+    }
   } catch { /* player gone */ }
 }
 
 /** Called by app.js when the YouTube player is ready. */
 function onPlayerReady() {
-  setOriginalVolume(settings.originalVolume);
+  showMix();
 }
 
 // ─────────────────────────────────────────────
@@ -658,7 +749,6 @@ async function startSession(mode, idx) {
   state.isRecording = true;
   setSessionUI(session);
 
-  setOriginalVolume(recording ? settings.guideVolume : settings.originalVolume);
   transport.setRate(settings.pace);
   transport.seek(session.startVt, true);
 
@@ -747,7 +837,6 @@ async function finishSession(userStopped) {
   s.beeps.forEach(b => b.stop());
   transport.pause();
   transport.setRate(1);
-  setOriginalVolume(settings.originalVolume);
   prompterClose(s);
 
   const result = s.recording ? await AudioEngine.stopCapture() : null;
@@ -773,18 +862,33 @@ async function finishSession(userStopped) {
   }
   if (!created.length || s.mode !== 'line') return;
 
+  // Park the playhead where the next thing happens, so the band, the video
+  // and the timeline are already showing it.
   const next = s.startIdx + 1 < state.captions.length ? s.startIdx + 1 : null;
   const after = settings.afterTake;
   if (after === 'loop' && !userStopped) {
+    cueCaption(s.startIdx);
     studio.chainTimer = setTimeout(() => { studio.chainTimer = null; startSession('line', s.startIdx); }, 600);
   } else if (after === 'chain' && !userStopped && next !== null) {
-    selectRow(next);
-    scrollRowToCenter(next);
+    cueCaption(next);
     studio.chainTimer = setTimeout(() => { studio.chainTimer = null; startSession('line', next); }, 600);
   } else if ((after === 'next' || after === 'chain') && next !== null) {
-    selectRow(next);
-    scrollRowToCenter(next);
+    cueCaption(next);
+  } else {
+    cueCaption(s.startIdx);
   }
+}
+
+/**
+ * Select a caption and park the playhead on its start (left alone while
+ * something is playing), so the video frame, band and timeline all show it.
+ */
+function cueCaption(i, { center = true } = {}) {
+  if (i === null || i < 0 || i >= state.captions.length) return;
+  selectRow(i);
+  if (center) scrollRowToCenter(i);
+  else rowEl(i)?.scrollIntoView({ block: 'nearest' });
+  if (!transport.isPlaying() && !session) transport.seek(state.captions[i].startTime);
 }
 
 /** End the session without keeping anything. */
@@ -796,7 +900,6 @@ function abortSession(message) {
   AudioEngine.abortCapture();
   transport.pause();
   transport.setRate(1);
-  setOriginalVolume(settings.originalVolume);
   prompterClose(s);
   session = null;
   state.isRecording = false;
@@ -1844,19 +1947,39 @@ function wireClipMenu() {
 }
 
 // ── Mix ──
+// "Original" mirrors the YouTube player: mute or change the volume there and
+// the slider follows; move the slider and the player follows. Nothing else
+// touches it, so recording never turns the video's sound back on.
+
+let mixShownAt = 0;
+
+function showMix() {
+  if (!sd.mixOriginal) return;
+  const v = originalVolume();
+  if (document.activeElement !== sd.mixOriginal) {
+    sd.mixOriginal.disabled = v === null;
+    sd.mixOriginal.value = v ?? 100;
+  }
+  sd.mixOriginalValue.textContent = v === null ? '—' : v === 0 ? 'Muted' : String(v);
+  sd.mixDub.value = settings.dubVolume;
+  sd.mixDubValue.textContent = settings.dubVolume;
+}
+
+/** Keep the mirror current while the Mix popover is open. */
+function mixFrame(p) {
+  if (!sd.mixPop || sd.mixPop.hidden || p - mixShownAt < 250) return;
+  mixShownAt = p;
+  showMix();
+}
+
 function wireMix() {
-  const show = () => {
-    sd.mixOriginal.value = settings.originalVolume;
-    sd.mixOriginalValue.textContent = settings.originalVolume;
-    sd.mixDub.value = settings.dubVolume;
-    sd.mixDubValue.textContent = settings.dubVolume;
-  };
-  show();
+  sd.mixPop = sd.mixOriginal.closest('.menu-pop');
+  sd.mixPop.previousElementSibling?.addEventListener('click', () => setTimeout(showMix, 0));
+  showMix();
   sd.mixOriginal.addEventListener('input', () => {
-    settings.originalVolume = +sd.mixOriginal.value;
-    sd.mixOriginalValue.textContent = settings.originalVolume;
-    if (!session) setOriginalVolume(settings.originalVolume);
-    saveSettings();
+    setOriginalVolume(+sd.mixOriginal.value);
+    const v = +sd.mixOriginal.value;
+    sd.mixOriginalValue.textContent = v === 0 ? 'Muted' : String(v);
   });
   sd.mixDub.addEventListener('input', () => {
     settings.dubVolume = +sd.mixDub.value;
@@ -1872,8 +1995,8 @@ function wireSettingsModal() {
   const f = {
     channel: $('set-channel'), ec: $('set-ec'), ns: $('set-ns'), agc: $('set-agc'), monitor: $('set-monitor'),
     preroll: $('set-preroll'), postroll: $('set-postroll'), beeps: $('set-beeps'), pace: $('set-pace'),
-    rythmo: $('set-rythmo'), overlay: $('set-overlay'), after: $('set-after'), autoalign: $('set-autoalign'),
-    guide: $('set-guide'), guideValue: $('set-guide-value'), latency: $('set-latency'), cleanup: $('set-cleanup'),
+    rythmo: $('set-rythmo'), band: $('set-band'), overlay: $('set-overlay'), after: $('set-after'),
+    autoalign: $('set-autoalign'), latency: $('set-latency'), cleanup: $('set-cleanup'),
   };
 
   const showPace = () => f.pace.querySelectorAll('[data-pace]').forEach(b => {
@@ -1890,11 +2013,10 @@ function wireSettingsModal() {
     f.postroll.value = String(settings.postRoll);
     f.beeps.checked = settings.beeps;
     f.rythmo.checked = settings.rythmo;
+    f.band.value = settings.bandMode;
     f.overlay.checked = settings.overlay;
     f.after.value = settings.afterTake;
     f.autoalign.checked = settings.autoAlign;
-    f.guide.value = settings.guideVolume;
-    f.guideValue.textContent = `${settings.guideVolume}%`;
     f.latency.value = settings.latencyMs;
     showPace();
     updateStorageInfo();
@@ -1924,6 +2046,7 @@ function wireSettingsModal() {
   onInput(f.postroll, () => { settings.postRoll = +f.postroll.value; });
   onInput(f.beeps, () => { settings.beeps = f.beeps.checked; });
   onInput(f.rythmo, () => { settings.rythmo = f.rythmo.checked; updateRythmoVisibility(); });
+  onInput(f.band, () => { setBandMode(f.band.value); });
   onInput(f.overlay, () => { settings.overlay = f.overlay.checked; });
   onInput(f.after, () => { settings.afterTake = f.after.value; });
   onInput(f.autoalign, () => { settings.autoAlign = f.autoalign.checked; });
@@ -1931,11 +2054,6 @@ function wireSettingsModal() {
     const v = clamp(Math.round(+f.latency.value || 0), -500, 500);
     settings.latencyMs = v;
     f.latency.value = v;
-  });
-  f.guide.addEventListener('input', () => {
-    settings.guideVolume = +f.guide.value;
-    f.guideValue.textContent = `${settings.guideVolume}%`;
-    changed();
   });
   f.pace.addEventListener('click', e => {
     const b = e.target.closest('[data-pace]');
@@ -1948,6 +2066,10 @@ function wireSettingsModal() {
 }
 
 function wireTimelineTools() {
+  document.getElementById('tp-prev').addEventListener('click', () => stepCaption(-1));
+  document.getElementById('tp-next').addEventListener('click', () => stepCaption(1));
+  document.getElementById('tp-start').addEventListener('click', () => goToCaptionEdge('start'));
+  document.getElementById('tp-end').addEventListener('click', () => goToCaptionEdge('end'));
   sd.undoBtn.addEventListener('click', undo);
   sd.redoBtn.addEventListener('click', redo);
   const showSnap = () => sd.snapBtn.setAttribute('aria-pressed', String(settings.snap));
@@ -1980,6 +2102,71 @@ function wireDock() {
 function onSelectionChanged() {
   updateInspector();
   rythmo.dirty = true;
+}
+
+// ─────────────────────────────────────────────
+// NAVIGATION
+// ─────────────────────────────────────────────
+
+const FRAME_SEC = 1 / 30;
+
+/** The caption to navigate from: the selected one, else the one at the playhead. */
+function navCaption() {
+  if (state.selectedRow !== null) return state.selectedRow;
+  if (!state.captions.length) return null;
+  const t = transport.now();
+  const i = state.captions.findIndex(c => c.endTime > t);
+  return i === -1 ? state.captions.length - 1 : i;
+}
+
+/** I / O: put the playhead on the selected caption's start or end. */
+function goToCaptionEdge(edge) {
+  if (session) return;
+  const i = navCaption();
+  if (i === null) { showToast('Load captions first', 'info'); return; }
+  if (state.selectedRow !== i) {
+    selectRow(i);
+    rowEl(i)?.scrollIntoView({ block: 'nearest' });
+  }
+  const cap = state.captions[i];
+  const t = edge === 'end' ? cap.endTime : cap.startTime;
+  transport.seek(t);
+  revealTime(t);
+}
+
+/** ↑ / ↓ and the transport's skip buttons: select a neighbour and go to its start. */
+function stepCaption(dir) {
+  if (session || !state.captions.length) return;
+  const cur = state.selectedRow;
+  const i = cur === null ? navCaption() : clamp(cur + dir, 0, state.captions.length - 1);
+  selectRow(i);
+  rowEl(i)?.scrollIntoView({ block: 'nearest' });
+  transport.seek(state.captions[i].startTime);
+  revealTime(state.captions[i].startTime);
+}
+
+/** ← / →: one frame (with Shift, one second), from a stopped playhead. */
+function stepFrames(n) {
+  if (session) return;
+  if (transport.isPlaying()) transport.pause();
+  const t = transport.now() + n * FRAME_SEC;
+  transport.seek(t);
+  revealTime(t);
+}
+
+function goToTimelineEdge(edge) {
+  if (session) return;
+  const t = edge === 'end' ? timelineDuration() : 0;
+  transport.seek(t);
+  revealTime(t);
+}
+
+/** Enter: play the selected caption with its dub, and stop at its end. */
+function playSelectedCaption() {
+  const i = navCaption();
+  if (i === null || session) return;
+  const cap = state.captions[i];
+  playSegment(cap.startTime, cap.endTime);
 }
 
 // ─────────────────────────────────────────────
@@ -2019,6 +2206,16 @@ function studioKey(e) {
     case '=':
     case '+': return act(() => zoomTimeline(1.4));
     case '-': return act(() => zoomTimeline(1 / 1.4));
+    case 'i': return act(() => goToCaptionEdge('start'));
+    case 'o': return act(() => goToCaptionEdge('end'));
+    case 'ArrowLeft': return act(() => stepFrames(e.shiftKey ? -30 : -1));
+    case 'ArrowRight': return act(() => stepFrames(e.shiftKey ? 30 : 1));
+    case 'Home': return act(() => goToTimelineEdge('start'));
+    case 'End': return act(() => goToTimelineEdge('end'));
+    case 'Enter':
+      // A focused button or splitter keeps Enter for itself.
+      if (document.activeElement?.matches?.('button, a[href], [role="separator"], summary')) return false;
+      return act(playSelectedCaption);
     default: return false;
   }
 }
@@ -2043,6 +2240,7 @@ function studioFrame() {
   requestAnimationFrame(studioFrame);
   const p = studioTick();
   updateMeter(p);
+  mixFrame(p);
   rythmoFrame(p);
   timelineFrame(p);
   if (sd.timecode) {
@@ -2083,6 +2281,28 @@ function initStudio() {
   const unlock = () => { AudioEngine.resume().catch(() => {}); };
   document.addEventListener('pointerdown', unlock, { capture: true });
   document.addEventListener('keydown', unlock, { capture: true });
+
+  // A mouse click on a tool button shouldn't leave focus on it: the next
+  // Space or Enter belongs to the shortcuts, not to that button again.
+  document.addEventListener('mousedown', e => {
+    if (e.button === 0 && e.target.closest(
+      '.tool-btn, .row-btn, .take-chip, .seg-btn, .btn-record, .btn-record-line, .btn-rehearse, .btn-stop, .meter, #rec-settings-btn')) {
+      e.preventDefault();
+    }
+  }, true);
+
+  // Clicking the YouTube player (its speaker, say) moves keyboard focus into
+  // it, and every shortcut after that would go to YouTube instead. Take focus
+  // back once the click has landed; the click itself still works.
+  window.addEventListener('blur', () => {
+    setTimeout(() => {
+      const a = document.activeElement;
+      if (a?.tagName === 'IFRAME' && a.closest('#youtube-iframe-wrapper')) {
+        a.blur();
+        window.focus();
+      }
+    }, 0);
+  });
 
   requestAnimationFrame(studioFrame);
   // rAF pauses in background tabs; keep sessions and playback ticking anyway.

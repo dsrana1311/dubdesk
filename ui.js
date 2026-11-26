@@ -161,6 +161,121 @@
     }
   }, true);
 
+  // ── Resizable panes ───────────────────────────
+  // One bar between the captions and the video side, and two on the video
+  // side: video | caption band | timeline. Drag them, nudge them with the
+  // arrow keys, or double-click one to put it back. The width is kept as a
+  // share of the window and the video as a share of its column, so the
+  // layout holds when the window changes size; all of it is remembered.
+  const LAYOUT_KEY = 'dubdesk_layout';
+  const LAYOUT_DEFAULT = { left: 58, video: null, band: 96 };
+  const MIN = { left: 360, right: 340, video: 90, band: 46, timeline: 140 };
+  const clampTo = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  const main = document.querySelector('.main-content');
+  const playerPanel = document.querySelector('.player-panel');
+  const videoPane = document.querySelector('.player-video');
+  const bandPane = document.getElementById('rythmo');
+  const splitCol = document.getElementById('split-col');
+  const splitVideo = document.getElementById('split-video');
+  const splitBand = document.getElementById('split-band');
+
+  const layout = { ...LAYOUT_DEFAULT };
+  try { Object.assign(layout, JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}')); } catch { /* defaults */ }
+
+  function applyLayout() {
+    root.style.setProperty('--pane-left', `${layout.left}fr`);
+    root.style.setProperty('--pane-right', `${100 - layout.left}fr`);
+    root.style.setProperty('--pane-left-pct', String(layout.left));
+    root.style.setProperty('--pane-band', `${layout.band}px`);
+    if (layout.video) root.style.setProperty('--pane-video', `${layout.video}%`);
+    else root.style.removeProperty('--pane-video');
+    videoPane.classList.toggle('user-sized', !!layout.video);
+    splitCol.setAttribute('aria-valuenow', String(Math.round(layout.left)));
+    splitVideo.setAttribute('aria-valuenow', String(Math.round(videoPane.offsetHeight)));
+    splitBand.setAttribute('aria-valuenow', String(layout.band));
+  }
+
+  function saveLayout() {
+    try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch { /* applies for this visit */ }
+  }
+
+  function columnHeight() {
+    const cs = getComputedStyle(playerPanel);
+    return playerPanel.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  }
+  const bandShown = () => !bandPane.classList.contains('hidden');
+  const splitsHeight = () => splitVideo.offsetHeight + (bandShown() ? splitBand.offsetHeight : 0);
+
+  function setLeft(pct) {
+    const w = main.clientWidth || window.innerWidth;
+    const lo = Math.min(50, (MIN.left / w) * 100);
+    const hi = Math.max(50, 100 - (MIN.right / w) * 100);
+    layout.left = Math.round(clampTo(pct, lo, hi) * 10) / 10;
+    applyLayout();
+  }
+
+  function setVideo(px) {
+    const H = columnHeight();
+    const band = bandShown() ? bandPane.offsetHeight : 0;
+    const max = Math.max(MIN.video, H - band - splitsHeight() - MIN.timeline);
+    layout.video = Math.round((clampTo(px, MIN.video, max) / H) * 1000) / 10;
+    applyLayout();
+  }
+
+  function setBand(px) {
+    const H = columnHeight();
+    const max = Math.max(MIN.band, Math.min(280, H - videoPane.offsetHeight - splitsHeight() - MIN.timeline));
+    layout.band = Math.round(clampTo(px, MIN.band, max));
+    applyLayout();
+  }
+
+  function resizable(handle, kind, onMove, onKey, reset) {
+    handle.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      try { handle.setPointerCapture(e.pointerId); } catch { /* pointer gone */ }
+      document.body.classList.add('is-resizing', `resizing-${kind}`);
+      const move = ev => onMove(ev);
+      const end = () => {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', end);
+        handle.removeEventListener('pointercancel', end);
+        document.body.classList.remove('is-resizing', `resizing-${kind}`);
+        saveLayout();
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', end);
+      handle.addEventListener('pointercancel', end);
+    });
+    handle.addEventListener('keydown', e => {
+      const back = e.key === 'ArrowLeft' || e.key === 'ArrowUp';
+      const fwd = e.key === 'ArrowRight' || e.key === 'ArrowDown';
+      if (!back && !fwd && e.key !== 'Enter') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Enter') reset();
+      else onKey((fwd ? 1 : -1) * (e.shiftKey ? 5 : 1));
+      saveLayout();
+    });
+    handle.addEventListener('dblclick', () => { reset(); saveLayout(); });
+  }
+
+  resizable(splitCol, 'col',
+    e => setLeft(((e.clientX - main.getBoundingClientRect().left) / main.clientWidth) * 100),
+    d => setLeft(layout.left + d * 2),
+    () => { layout.left = LAYOUT_DEFAULT.left; applyLayout(); });
+  resizable(splitVideo, 'row',
+    e => setVideo(e.clientY - videoPane.getBoundingClientRect().top),
+    d => setVideo(videoPane.offsetHeight + d * 12),
+    () => { layout.video = LAYOUT_DEFAULT.video; applyLayout(); });
+  resizable(splitBand, 'row',
+    e => setBand(e.clientY - bandPane.getBoundingClientRect().top),
+    d => setBand(layout.band + d * 8),
+    () => { layout.band = LAYOUT_DEFAULT.band; applyLayout(); });
+
+  applyLayout();
+
   // ── Timeline play button ──────────────────────
   // It floats over the timeline, whose pointerdown starts a drag or a seek.
   const timelinePlay = document.getElementById('timeline-play-btn');
