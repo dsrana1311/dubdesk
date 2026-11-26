@@ -51,33 +51,163 @@
         <button class="modal-close" id="close-shortcuts" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
+        <h3 class="shortcut-heading">Recording</h3>
         <dl class="shortcut-list">
-          <div class="shortcut-row"><dt><kbd>Space</kbd></dt><dd>Play / pause video</dd></div>
+          <div class="shortcut-row"><dt><kbd>T</kbd></dt><dd>Record the selected line <span class="shortcut-note">(pre-roll, beeps, then the line)</span></dd></div>
+          <div class="shortcut-row"><dt><kbd>R</kbd></dt><dd>Record continuously from the selected line</dd></div>
+          <div class="shortcut-row"><dt><kbd>P</kbd></dt><dd>Rehearse the selected line <span class="shortcut-note">(nothing is recorded)</span></dd></div>
+          <div class="shortcut-row"><dt><kbd>Esc</kbd> or <kbd>Space</kbd></dt><dd>Stop and keep the take</dd></div>
+          <div class="shortcut-row"><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Previous / next take of the line</dd></div>
+          <div class="shortcut-row"><dt><kbd>L</kbd></dt><dd>Listen to the line’s dub on its own</dd></div>
+        </dl>
+
+        <h3 class="shortcut-heading">Clip editing</h3>
+        <dl class="shortcut-list">
+          <div class="shortcut-row"><dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Nudge the clip 10 ms earlier / later <span class="shortcut-note">(with Shift: 100 ms)</span></dd></div>
+          <div class="shortcut-row"><dt><kbd>A</kbd></dt><dd>Align the speech to the caption start</dd></div>
+          <div class="shortcut-row"><dt><kbd>F</kbd></dt><dd>Fit the speech to the caption length <span class="shortcut-note">(pitch stays the same)</span></dd></div>
+          <div class="shortcut-row"><dt><kbd>Del</kbd></dt><dd>Delete the take</dd></div>
+          <div class="shortcut-row"><dt><kbd>Ctrl</kbd> + <kbd>Z</kbd></dt><dd>Undo <span class="shortcut-note">(with Shift: redo)</span></dd></div>
+          <div class="shortcut-row"><dt><kbd>=</kbd> <kbd>-</kbd></dt><dd>Zoom the timeline in / out</dd></div>
+          <div class="shortcut-row"><dt>Drag</dt><dd>Move a clip; drag its edges to trim <span class="shortcut-note">(hold Alt to skip snapping)</span></dd></div>
+        </dl>
+
+        <h3 class="shortcut-heading">Captions</h3>
+        <dl class="shortcut-list">
+          <div class="shortcut-row"><dt><kbd>Space</kbd></dt><dd>Play / pause, with the dub</dd></div>
           <div class="shortcut-row"><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Move between captions <span class="shortcut-note">(move within the text while editing)</span></dd></div>
-          <div class="shortcut-row">
-            <dt><kbd>Ctrl</kbd> + <kbd>B</kbd></dt>
-            <dd>Bookmark selected caption <span class="shortcut-note">(works while typing)</span></dd>
-          </div>
-          <div class="shortcut-row">
-            <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd></dt>
-            <dd>Jump to bookmark</dd>
-          </div>
-          <div class="shortcut-row"><dt><kbd>B</kbd></dt><dd>Bookmark (when not typing)</dd></div>
           <div class="shortcut-row"><dt><kbd>E</kbd></dt><dd>Edit selected caption's translation</dd></div>
           <div class="shortcut-row">
             <dt><kbd>Ctrl</kbd> + <kbd>↑</kbd> <kbd>↓</kbd></dt>
             <dd>Move to previous / next caption <span class="shortcut-note">(stays in edit mode)</span></dd>
           </div>
-          <div class="shortcut-row"><dt><kbd>R</kbd></dt><dd>Record continuously from selected</dd></div>
-          <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Exit editing / stop recording</dd></div>
-          <div class="shortcut-row"><dt><kbd>9</kbd></dt><dd>Re-translate selected (90% length)</dd></div>
-          <div class="shortcut-row"><dt><kbd>0</kbd></dt><dd>Re-translate selected (100% length)</dd></div>
+          <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Exit editing</dd></div>
+          <div class="shortcut-row">
+            <dt><kbd>Ctrl</kbd> + <kbd>B</kbd></dt>
+            <dd>Bookmark selected caption <span class="shortcut-note">(works while typing; B when not)</span></dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd></dt>
+            <dd>Jump to bookmark</dd>
+          </div>
+          <div class="shortcut-row"><dt><kbd>9</kbd> <kbd>0</kbd></dt><dd>Re-translate selected (90% / 100% length)</dd></div>
           <div class="shortcut-row"><dt><kbd>?</kbd></dt><dd>Show this help</dd></div>
         </dl>
         <p class="hint">Single-key shortcuts are ignored while you're typing in a text field,
-           so they never interfere with editing. The <kbd>Ctrl</kbd> combinations always work.</p>
+           so they never interfere with editing. <kbd>Ctrl</kbd>+<kbd>B</kbd> always works; inside a text field,
+           <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes typing rather than clip edits.</p>
         <p class="hint">Full keyboard flow: <kbd>↑</kbd><kbd>↓</kbd> to find a caption, <kbd>E</kbd> to edit it,
            <kbd>Ctrl</kbd>+<kbd>↑</kbd><kbd>↓</kbd> to keep editing down the list, <kbd>Esc</kbd> when done.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recording Settings Modal -->
+  <div id="rec-settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="rec-settings-title">
+    <div class="modal-content modal-wide">
+      <div class="modal-header">
+        <h2 id="rec-settings-title">Recording settings</h2>
+        <button class="modal-close" id="close-rec-settings" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body settings-body">
+        <section class="set-section">
+          <h3>Microphone</h3>
+          <div class="set-row">
+            <label for="set-channel">Input channel</label>
+            <select id="set-channel" class="set-select">
+              <option value="0">Input 1 (left)</option>
+              <option value="1">Input 2 (right)</option>
+              <option value="-1">Inputs 1 + 2 mixed</option>
+            </select>
+          </div>
+          <label class="set-check"><input type="checkbox" id="set-ec"> Echo cancellation</label>
+          <label class="set-check"><input type="checkbox" id="set-ns"> Noise suppression</label>
+          <label class="set-check"><input type="checkbox" id="set-agc"> Automatic gain</label>
+          <p class="hint">Leave these off for clean, natural takes — they’re made for calls and smear a performance. Turn them on only for a laptop mic in a noisy room.</p>
+          <label class="set-check"><input type="checkbox" id="set-monitor"> Hear yourself while recording</label>
+          <p class="hint">Use headphones, or the speakers will feed back. Adds a little delay; an interface’s direct monitoring is better if you have one.</p>
+        </section>
+
+        <section class="set-section">
+          <h3>Cueing</h3>
+          <div class="set-row">
+            <label for="set-preroll">Pre-roll</label>
+            <select id="set-preroll" class="set-select">
+              <option value="0">None</option>
+              <option value="1">1 second</option>
+              <option value="2">2 seconds</option>
+              <option value="3">3 seconds</option>
+              <option value="4">4 seconds</option>
+              <option value="5">5 seconds</option>
+            </select>
+          </div>
+          <div class="set-row">
+            <label for="set-postroll">Post-roll</label>
+            <select id="set-postroll" class="set-select">
+              <option value="0.5">0.5 seconds</option>
+              <option value="1">1 second</option>
+              <option value="1.5">1.5 seconds</option>
+              <option value="2">2 seconds</option>
+              <option value="3">3 seconds</option>
+            </select>
+          </div>
+          <label class="set-check"><input type="checkbox" id="set-beeps"> Three beeps before the line</label>
+          <p class="hint">The classic ADR cue: beep, beep, beep — and speak on the silent fourth. Needs a pre-roll of 3 seconds for all three.</p>
+          <div class="set-row">
+            <span class="set-label" id="set-pace-label">Recording pace</span>
+            <div class="seg" id="set-pace" role="group" aria-labelledby="set-pace-label">
+              <button type="button" class="seg-btn" data-pace="1" aria-pressed="true">1×</button>
+              <button type="button" class="seg-btn" data-pace="0.75" aria-pressed="false">0.75×</button>
+              <button type="button" class="seg-btn" data-pace="0.5" aria-pressed="false">0.5×</button>
+            </div>
+          </div>
+          <p class="hint">Below 1× the video plays slower while you record, then the take is sped back up to 1× without changing the pitch of your voice.</p>
+        </section>
+
+        <section class="set-section">
+          <h3>Prompter</h3>
+          <label class="set-check"><input type="checkbox" id="set-rythmo"> Rythmo band under the video</label>
+          <p class="hint">The line scrolls past a sync bar: say each word as it crosses. You see every word coming, so there’s no reaction delay.</p>
+          <label class="set-check"><input type="checkbox" id="set-overlay"> Large teleprompter while recording</label>
+        </section>
+
+        <section class="set-section">
+          <h3>Takes</h3>
+          <div class="set-row">
+            <label for="set-after">After a line</label>
+            <select id="set-after" class="set-select">
+              <option value="next">Select the next line</option>
+              <option value="stay">Stay on the line</option>
+              <option value="chain">Record the next line straight away</option>
+              <option value="loop">Record another take</option>
+            </select>
+          </div>
+          <label class="set-check"><input type="checkbox" id="set-autoalign"> Move new takes so the speech starts on the caption</label>
+          <div class="set-row">
+            <label for="set-guide">Original audio while recording</label>
+            <div class="set-range">
+              <input type="range" id="set-guide" min="0" max="100" step="5">
+              <output id="set-guide-value" for="set-guide">100%</output>
+            </div>
+          </div>
+          <div class="set-row">
+            <label for="set-latency">Sync offset</label>
+            <div class="num-field">
+              <input type="number" id="set-latency" min="-500" max="500" step="5">
+              <span>ms</span>
+            </div>
+          </div>
+          <p class="hint">Takes are lined up with the picture automatically. If yours still land consistently late, raise this; if early, lower it. Applies to new takes.</p>
+        </section>
+
+        <section class="set-section">
+          <h3>Storage</h3>
+          <p class="hint set-storage" id="set-storage"></p>
+          <button type="button" id="set-cleanup" class="btn btn-ghost">Delete takes not in use</button>
+        </section>
+      </div>
+      <div class="modal-footer">
+        <button id="done-rec-settings" class="btn btn-primary">Done</button>
       </div>
     </div>
   </div>
@@ -128,6 +258,7 @@
         <h1 id="video-title" class="video-title">Untitled</h1>
         <div class="project-status">
           <span class="progress-indicator" id="progress-indicator" aria-live="polite">0 / 0 recorded</span>
+          <span class="save-status" id="save-status" aria-live="polite"></span>
           <div class="verify-progress" id="verify-progress" aria-hidden="true">
             <div class="verify-progress-100" id="verify-progress-100"></div>
             <div class="verify-progress-90" id="verify-progress-90"></div>
@@ -166,10 +297,11 @@
       <div class="menu" data-menu>
         <button class="btn btn-glass btn-chevron" data-icon="share" data-menu-trigger aria-haspopup="menu" aria-expanded="false">Export</button>
         <div class="menu-pop glass" data-glass role="menu" hidden>
-          <button id="save-draft-btn" class="menu-item" role="menuitem" data-icon="save">Save draft<small>In this browser</small></button>
+          <button id="save-draft-btn" class="menu-item" role="menuitem" data-icon="save">Save now<small>Saves on its own, recordings included</small></button>
           <div class="menu-separator" role="separator"></div>
           <button id="submit-btn" class="menu-item" role="menuitem" data-icon="file">Download subtitles<small>Hinglish .srt</small></button>
-          <button id="download-all-audio-btn" class="menu-item" role="menuitem" data-icon="download">Download full audio<small>One .mp3, start to end</small></button>
+          <button id="download-all-audio-btn" class="menu-item" role="menuitem" data-icon="download">Download full dub<small>WAV, 24-bit 48 kHz, start to end</small></button>
+          <button id="download-all-mp3-btn" class="menu-item" role="menuitem" data-icon="download">Download full dub<small>MP3, start to end</small></button>
           <div class="menu-separator" role="separator"></div>
           <button id="criblate-btn" class="menu-item" role="menuitem" data-icon="share">Upload to Criblate</button>
         </div>
@@ -209,8 +341,8 @@
           <ol class="empty-steps">
             <li><strong>Load the video</strong><span>Paste its YouTube URL in the bar above.</span></li>
             <li><strong>Translate</strong><span>Uses your OpenAI key. <button type="button" id="add-key-empty" class="link-btn">Add it in Settings</button>.</span></li>
-            <li><strong>Record</strong><span>Read along with the teleprompter, caption by caption.</span></li>
-            <li><strong>Export</strong><span>Download the subtitles and the full dub audio.</span></li>
+            <li><strong>Record</strong><span>Line by line or straight through, with pre-roll, cue beeps and a rythmo band.</span></li>
+            <li><strong>Edit &amp; export</strong><span>Pick takes, nudge and fit clips, then download the dub as WAV or MP3.</span></li>
           </ol>
         </div>
       </div>
@@ -227,30 +359,42 @@
 
         <div class="dock-divider" aria-hidden="true"></div>
 
-        <div class="mic-wrapper" title="Select microphone">
-          <span class="mic-icon" data-icon="mic" aria-hidden="true"></span>
-          <select id="mic-select" class="mic-select" aria-label="Microphone"></select>
-        </div>
-
-        <div class="pace-wrapper" title="Slow down recording pace — audio is sped up to match caption duration">
-          <label class="pace-label" for="pace-slider">Pace</label>
-          <div class="slider" id="pace-track">
-            <div class="slider-rail"><div class="slider-fill"></div></div>
-            <div class="slider-thumb" data-glass data-glass-bend="0.7"></div>
-            <input type="range" id="pace-slider" class="pace-slider" min="30" max="100" value="100" step="5">
+        <div class="input-strip" role="group" aria-label="Microphone">
+          <div class="mic-wrapper" title="Select microphone">
+            <span class="mic-icon" data-icon="mic" aria-hidden="true"></span>
+            <select id="mic-select" class="mic-select" aria-label="Microphone"></select>
           </div>
-          <span id="pace-value" class="pace-value">1.0x</span>
+          <button id="input-meter" class="meter" type="button" aria-pressed="false"
+            title="Check your input level (opens the microphone)" aria-label="Input level meter — opens or closes the microphone">
+            <span class="meter-track" aria-hidden="true">
+              <span class="meter-cover" id="meter-cover"></span>
+              <span class="meter-peak" id="meter-peak"></span>
+            </span>
+          </button>
         </div>
 
         <div class="dock-divider" aria-hidden="true"></div>
 
-        <button id="record-all-btn" class="btn btn-record" data-icon="record" title="Record continuously from the selected caption (R)" disabled>Record from here</button>
-        <button id="stop-recording-btn" class="btn btn-stop hidden" data-icon="stop" title="Stop recording (Esc)">Stop</button>
+        <div class="dock-transport" role="group" aria-label="Recording">
+          <button id="rehearse-btn" class="btn btn-glass btn-rehearse" data-icon="rehearse" disabled><span class="btn-text">Rehearse</span></button>
+          <button id="record-line-btn" class="btn btn-record-line" data-icon="record" disabled><span class="btn-text">Record line</span></button>
+          <button id="record-all-btn" class="btn btn-record" data-icon="record-flow" disabled><span class="btn-text">Record from here</span></button>
+          <div id="rec-status" class="rec-status hidden" role="status">
+            <span class="rec-dot" aria-hidden="true"></span>
+            <span id="rec-status-label" class="rec-label">Cueing</span>
+            <span id="rec-status-time" class="rec-time"></span>
+          </div>
+          <button id="stop-recording-btn" class="btn btn-stop hidden" data-icon="stop" title="Stop and keep the take (Esc or Space)">Stop</button>
+        </div>
+
+        <button id="rec-settings-btn" class="btn btn-icon btn-tune" data-icon="tune" title="Recording settings" aria-label="Recording settings">
+          <span id="pace-badge" class="pace-badge hidden"></span>
+        </button>
       </div>
     </section>
 
     <!-- Video and dub timeline -->
-    <aside class="player-panel" aria-label="Video and dub timeline">
+    <aside class="player-panel" aria-label="Video, rythmo band and dub timeline">
       <div class="player-video">
         <div id="player-placeholder" class="player-placeholder">
           <div class="placeholder-icon" data-icon="play" aria-hidden="true"></div>
@@ -259,11 +403,67 @@
         <div id="youtube-iframe-wrapper" class="youtube-iframe-wrapper hidden"></div>
       </div>
 
+      <div id="rythmo" class="rythmo hidden" aria-hidden="true"
+        title="Rythmo band: say each word as it crosses the line. Drag to scrub, scroll to zoom.">
+        <canvas id="rythmo-canvas"></canvas>
+      </div>
+
       <div class="timeline-panel">
         <div class="timeline-header">
-          <div class="timeline-label">Dub timeline</div>
-          <div class="timeline-hint">Scroll to zoom · drag to pan</div>
+          <div class="timeline-title">
+            <div class="timeline-label">Dub timeline</div>
+            <span id="timecode" class="timecode" aria-label="Playhead position">00:00:00.000</span>
+          </div>
+          <div class="timeline-tools" role="toolbar" aria-label="Timeline">
+            <button id="tl-undo" class="tool-btn" data-icon="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled></button>
+            <button id="tl-redo" class="tool-btn" data-icon="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled></button>
+            <span class="tool-sep" aria-hidden="true"></span>
+            <button id="tl-snap" class="tool-btn tool-text" aria-pressed="true"
+              title="Snap clips to captions, the playhead and other clips. Hold Alt while dragging to skip it.">Snap</button>
+            <div class="menu" data-menu>
+              <button class="tool-btn tool-text btn-chevron" data-menu-trigger aria-haspopup="true" aria-expanded="false" title="Playback mix">Mix</button>
+              <div class="menu-pop glass mix-pop" data-glass hidden>
+                <label class="mix-row">
+                  <span>Original</span>
+                  <input type="range" id="mix-original" min="0" max="100" step="1" aria-label="Original audio volume">
+                  <output id="mix-original-value">100</output>
+                </label>
+                <label class="mix-row">
+                  <span>Dub</span>
+                  <input type="range" id="mix-dub" min="0" max="100" step="1" aria-label="Dub volume">
+                  <output id="mix-dub-value">100</output>
+                </label>
+                <p class="mix-hint">The dub plays in sync with the video. Turn the original down to hear only your voice.</p>
+              </div>
+            </div>
+            <span class="tool-sep" aria-hidden="true"></span>
+            <button id="tl-zoom-out" class="tool-btn" data-icon="minus" title="Zoom out (-)" aria-label="Zoom out"></button>
+            <button id="tl-zoom-in" class="tool-btn" data-icon="plus" title="Zoom in (=)" aria-label="Zoom in"></button>
+            <button id="tl-fit" class="tool-btn tool-text" title="Show the whole timeline">Fit</button>
+          </div>
         </div>
+
+        <div id="clip-inspector" class="clip-inspector hidden" role="group" aria-label="Selected clip">
+          <span id="ci-title" class="ci-title">#1</span>
+          <div class="ci-group">
+            <button id="ci-prev-take" class="tool-btn" data-icon="chev-left" title="Previous take ([)" aria-label="Previous take"></button>
+            <span id="ci-take" class="ci-value">Take 1/1</span>
+            <button id="ci-next-take" class="tool-btn" data-icon="chev-right" title="Next take (])" aria-label="Next take"></button>
+          </div>
+          <span class="ci-field" title="How far the clip has been moved from where it was recorded. Nudge with , and .">Shift <b id="ci-offset">0 ms</b></span>
+          <div class="ci-group">
+            <button id="ci-gain-down" class="tool-btn" data-icon="minus" title="Gain −1 dB" aria-label="Lower gain"></button>
+            <span id="ci-gain" class="ci-value">0.0 dB</span>
+            <button id="ci-gain-up" class="tool-btn" data-icon="plus" title="Gain +1 dB" aria-label="Raise gain"></button>
+          </div>
+          <div class="ci-actions">
+            <button id="ci-align" class="tool-btn tool-text" title="Move the clip so the speech starts on the caption (A)">Align</button>
+            <button id="ci-fit" class="tool-btn tool-text">Fit</button>
+            <button id="ci-reset" class="tool-btn tool-text" title="Put the clip back where it was recorded">Reset</button>
+            <button id="ci-delete" class="tool-btn tool-text tool-danger" title="Delete this take (Del)">Delete</button>
+          </div>
+        </div>
+
         <div id="timeline-viewport" class="timeline-viewport">
           <canvas id="timeline-canvas"></canvas>
           <div id="timeline-playhead" class="timeline-playhead hidden"></div>
@@ -289,13 +489,39 @@
     </div>
   </div>
 
-  <!-- Flow teleprompter — shown during continuous recording -->
-  <div id="flow-teleprompter" class="flow-tp hidden" aria-hidden="true">
-    <div class="flow-tp-content"></div>
+  <!-- Teleprompter — shown while recording or rehearsing -->
+  <div id="prompter" class="prompter hidden" aria-hidden="true">
+    <div class="prompter-head">
+      <span id="prompter-badge" class="prompter-badge">REC</span>
+      <span id="prompter-cue" class="prompter-cue"></span>
+      <span id="prompter-clock" class="prompter-clock">Cueing…</span>
+    </div>
+    <div id="prompter-viewport" class="prompter-viewport">
+      <div id="prompter-lines" class="prompter-lines"></div>
+    </div>
+    <div id="prompter-count" class="prompter-count"></div>
+  </div>
+
+  <!-- Clip menu — right-click a clip on the timeline -->
+  <div id="clip-menu" class="menu-pop glass clip-menu" data-glass role="menu" aria-label="Clip" hidden>
+    <button class="menu-item" data-action="play" data-icon="play" role="menuitem">Play clip<kbd>dbl-click</kbd></button>
+    <button class="menu-item" data-action="align" data-icon="align" role="menuitem">Align to caption start<kbd>A</kbd></button>
+    <button class="menu-item" data-action="fit" data-icon="fit" role="menuitem">Fit to caption length<kbd>F</kbd></button>
+    <button class="menu-item" data-action="reset" data-icon="reset" role="menuitem">Back to recorded position</button>
+    <div class="menu-separator" role="separator"></div>
+    <button class="menu-item" data-action="prev-take" data-icon="chev-left" role="menuitem">Previous take<kbd>[</kbd></button>
+    <button class="menu-item" data-action="next-take" data-icon="chev-right" role="menuitem">Next take<kbd>]</kbd></button>
+    <button class="menu-item" data-action="download" data-icon="download" role="menuitem">Download line</button>
+    <div class="menu-separator" role="separator"></div>
+    <button class="menu-item menu-danger" data-action="delete" data-icon="trash" role="menuitem">Delete take<kbd>Del</kbd></button>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+  <script src="engine.js"></script>
   <script src="app.js"></script>
+  <script src="studio.js"></script>
+  <script src="prompter.js"></script>
+  <script src="timeline.js"></script>
   <script src="glass.js"></script>
   <script src="ui.js"></script>
 </body>

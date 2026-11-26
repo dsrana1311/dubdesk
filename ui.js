@@ -54,24 +54,6 @@
 
   liftOnPress(themeSwitch, themeSwitch);
 
-  // ── Pace slider ───────────────────────────────
-  // The native range input stays on top, invisible, so dragging, keyboard use and
-  // screen readers keep working; the glass rail and thumb just follow its value.
-  const paceTrack = document.getElementById('pace-track');
-  const paceSlider = document.getElementById('pace-slider');
-
-  function showPace() {
-    const min = Number(paceSlider.min);
-    const max = Number(paceSlider.max);
-    const share = (Number(paceSlider.value) - min) / (max - min);
-    paceTrack.style.setProperty('--value', share.toFixed(4));
-  }
-  paceSlider.addEventListener('input', showPace);
-  liftOnPress(paceSlider, paceTrack);
-  showPace();
-  // app.js restores the saved pace on DOMContentLoaded, after this script runs.
-  document.addEventListener('DOMContentLoaded', showPace);
-
   // ── Menus ─────────────────────────────────────
   let openMenu = null;
 
@@ -180,9 +162,10 @@
   }, true);
 
   // ── Timeline play button ──────────────────────
-  // It floats over the timeline, whose mousedown starts a drag or a seek.
-  document.getElementById('timeline-play-btn')
-    .addEventListener('mousedown', e => e.stopPropagation());
+  // It floats over the timeline, whose pointerdown starts a drag or a seek.
+  const timelinePlay = document.getElementById('timeline-play-btn');
+  timelinePlay.addEventListener('mousedown', e => e.stopPropagation());
+  timelinePlay.addEventListener('pointerdown', e => e.stopPropagation());
 
   // ── Empty state ───────────────────────────────
   document.addEventListener('click', e => {
